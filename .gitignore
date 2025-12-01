@@ -1,0 +1,15 @@
+# Datos y Modelos
+/data/*
+!/data/README.md
+/models/*.onnx
+
+# Python
+**/__pycache__/
+.venv/
+*.pyc
+.ipynb_checkpoints/
+
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
