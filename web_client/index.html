@@ -13,7 +13,12 @@
   </head>
   <body>
     <h1>Vocalis Audio Analyzer</h1>
-    <button id="startRecording">Start Recording</button>
+    
+    <!-- Spectrum Visualizer -->
+    <canvas id="visualizer" width="800" height="200" style="width: 100%; background-color: #1a1a1a; border-radius: 8px; margin-bottom: 20px;"></canvas>
+
+    <div id="controls">
+      <button id="startRecording">Start Recording</button>
     <button id="stopRecording" disabled>Stop Recording</button>
     <p id="status">Status: Ready</p>
     <div id="results">

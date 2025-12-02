@@ -11,6 +11,8 @@ const startRecordingButton = document.getElementById('startRecording');
 const stopRecordingButton = document.getElementById('stopRecording');
 const audioPlayback = document.getElementById('audioPlayback');
 const downloadLink = document.getElementById('downloadLink');
+const canvas = document.getElementById('visualizer');
+const canvasCtx = canvas.getContext('2d');
 
 let session;
 const modelPath = '/vocalis.onnx'; // Relative to public folder
@@ -23,6 +25,8 @@ let mediaRecorder;
 let audioChunks = [];
 let audioContext;
 let audioProcessor;
+let analyser;
+let visualizerFrameId;
 
 async function loadModel() {
     statusElement.textContent = 'Status: Loading model...';
@@ -39,12 +43,50 @@ async function loadModel() {
     }
 }
 
+function drawVisualizer() {
+    if (!analyser) return;
+
+    visualizerFrameId = requestAnimationFrame(drawVisualizer);
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    analyser.getByteFrequencyData(dataArray);
+
+    canvasCtx.fillStyle = '#1a1a1a';
+    canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const barWidth = (canvas.width / bufferLength) * 2.5;
+    let barHeight;
+    let x = 0;
+
+    for (let i = 0; i < bufferLength; i++) {
+        barHeight = dataArray[i];
+
+        // Color gradient based on height (frequency magnitude)
+        const r = barHeight + (25 * (i / bufferLength));
+        const g = 250 * (i / bufferLength);
+        const b = 50;
+
+        canvasCtx.fillStyle = `rgb(${r},${g},${b})`;
+        canvasCtx.fillRect(x, canvas.height - barHeight / 1.5, barWidth, barHeight / 1.5);
+
+        x += barWidth + 1;
+    }
+}
+
 async function startRecording() {
     statusElement.textContent = 'Status: Requesting microphone access...';
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         console.log('Microphone access granted');
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Setup Visualizer
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+        drawVisualizer();
         
         mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
@@ -55,6 +97,8 @@ async function startRecording() {
 
         mediaRecorder.onstop = async () => {
             console.log('Recorder stopped. Processing audio...');
+            cancelAnimationFrame(visualizerFrameId); // Stop visualizer
+            
             statusElement.textContent = 'Status: Recording stopped. Processing audio...';
             const audioBlob = new Blob(audioChunks, { 'type' : 'audio/webm; codecs=opus' });
             
@@ -217,23 +261,24 @@ function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
 }
 
 async function runInference(audioData) {
-    statusElement.textContent = 'Status: Running inference...';
+    statusElement.textContent = 'Status: Running ONNX inference for Vowel...';
     vowelElement.textContent = '';
-    genderElement.textContent = '';
-
+    
+    // Perform DSP-based gender classification
+    const sr = EXPECTED_SAMPLE_RATE; // Sample rate for audioData
+    const genderPrediction = classifyGenderDSP(audioData, sr);
+    genderElement.textContent = genderPrediction;
+    
     try {
-        // Create input tensor
+        // Create input tensor for Vowel prediction
         const inputTensor = new ort.Tensor('float32', audioData, [1, EXPECTED_AUDIO_LENGTH]);
         
-        // Run inference
-        const feeds = { waveform: inputTensor }; // 'waveform' is the input name defined in export_onnx.py
+        // Run ONNX inference for Vowel
+        const feeds = { waveform: inputTensor };
         const results = await session.run(feeds);
 
-        // Process results
-        const vowelLogits = results.vowel_logits.data; // 'vowel_logits' is the output name
-        const genderLogits = results.gender_logits.data; // 'gender_logits' is the output name
-
-        // Find argmax for vowel
+        // Process results for Vowel
+        const vowelLogits = results.vowel_logits.data;
         let maxVowelLogit = -Infinity;
         let vowelIndex = 0;
         for (let i = 0; i < vowelLogits.length; i++) {
@@ -242,31 +287,90 @@ async function runInference(audioData) {
                 vowelIndex = i;
             }
         }
-
-        // Find argmax for gender
-        let maxGenderLogit = -Infinity;
-        let genderIndex = 0;
-        for (let i = 0; i < genderLogits.length; i++) {
-            if (genderLogits[i] > maxGenderLogit) {
-                maxGenderLogit = genderLogits[i];
-                genderIndex = i;
-            }
-        }
         
         const VOWEL_LABELS = ["a", "e", "i", "o", "u"];
-        const GENDER_LABELS = ["M", "F"];
-
         vowelElement.textContent = VOWEL_LABELS[vowelIndex];
-        genderElement.textContent = GENDER_LABELS[genderIndex];
         statusElement.textContent = 'Status: Inference complete. Ready to record.';
 
         console.log('Vowel Logits:', vowelLogits);
-        console.log('Gender Logits:', genderLogits);
-        console.log(`Prediction: Vowel = ${VOWEL_LABELS[vowelIndex]}, Gender = ${GENDER_LABELS[genderIndex]}`);
+        console.log(`Prediction: Vowel = ${VOWEL_LABELS[vowelIndex]}, Gender = ${genderPrediction} (DSP)`);
 
     } catch (e) {
-        statusElement.textContent = `Status: Error during inference: ${e.message}`;
-        console.error('Error during inference:', e);
+        statusElement.textContent = `Status: Error during ONNX inference: ${e.message}`;
+        console.error('Error during ONNX inference:', e);
+    }
+}
+
+// Function to estimate F0 (Pitch) from audio data in JavaScript
+function getPitch(audioData, sr) {
+    // Implementación simplificada de detección de pitch (autocorrelación)
+    // Esto es una aproximación, no un pyin completo como librosa,
+    // pero debería ser suficiente para la distinción M/F.
+
+    // Parámetros básicos de autocorrelación para pitch
+    const FMIN = 50; // Hz
+    const FMAX = 400; // Hz
+    const HOP_LENGTH = 512;
+    const WIN_LENGTH = 2048; // Ventana de análisis
+    
+    let pitches = [];
+    
+    // Dividir audio en ventanas
+    for (let i = 0; i < audioData.length - WIN_LENGTH; i += HOP_LENGTH) {
+        const window = audioData.slice(i, i + WIN_LENGTH);
+        
+        // Autocorrelación (simplified)
+        // Podríamos usar FFT -> Inverse FFT para una mejor autocorrelación,
+        // pero una directa es más simple para JS puro.
+        const r = new Float32Array(WIN_LENGTH);
+        for (let lag = 0; lag < WIN_LENGTH; lag++) {
+            for (let j = 0; j < WIN_LENGTH - lag; j++) {
+                r[lag] += window[j] * window[j + lag];
+            }
+        }
+        
+        // Buscar el pico en el rango de frecuencia deseado
+        let maxCorr = -1;
+        let bestLag = -1;
+        
+        // Convertir FMIN/FMAX a lags
+        const minLag = Math.floor(sr / FMAX);
+        const maxLag = Math.floor(sr / FMIN);
+
+        for (let lag = minLag; lag <= maxLag; lag++) {
+            if (r[lag] > maxCorr) {
+                maxCorr = r[lag];
+                bestLag = lag;
+            }
+        }
+        
+        if (bestLag > 0) {
+            pitches.push(sr / bestLag);
+        }
+    }
+    
+    // Mediana de los pitches encontrados
+    if (pitches.length > 0) {
+        pitches.sort((a, b) => a - b);
+        return pitches[Math.floor(pitches.length / 2)];
+    }
+    return 0; // No pitch found
+}
+
+// Function to classify gender using DSP features (F0)
+function classifyGenderDSP(audioData, sr) {
+    const f0 = getPitch(audioData, sr);
+    console.log('Detected F0 (Pitch):', f0);
+
+    // Decision rule from our trained classifier: f0 <= 178.70
+    if (f0 > 0) { // Only classify if a pitch was detected
+        if (f0 <= 178.70) {
+            return "M (DSP)";
+        } else {
+            return "F (DSP)";
+        }
+    } else {
+        return "Unknown (DSP - No Pitch)";
     }
 }
 
