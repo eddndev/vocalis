@@ -31,14 +31,21 @@ def main():
             # Extraer features DSP
             feats = get_features(y, sr)
             
-            results.append({
+            entry = {
                 'filename': fname,
                 'f0': feats['f0'],
                 'f1': feats['f1'],
                 'f2': feats['f2'],
                 'label_vowel': row['label_vowel'],
                 'label_gender': row['label_gender']
-            })
+            }
+            
+            # Add MFCCs dynamically
+            for k, v in feats.items():
+                if k.startswith('mfcc_'):
+                    entry[k] = v
+            
+            results.append(entry)
         except Exception as e:
             # Si falla un archivo (muy corto o corrupto), lo saltamos
             continue
