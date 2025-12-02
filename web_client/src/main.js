@@ -1,0 +1,335 @@
+import * as ort from 'onnxruntime-web';
+
+// Configure ONNX Runtime Web
+ort.env.wasm.wasmPaths = "/";
+ort.env.wasm.executionProviders = ['wasm-simd', 'wasm']; // Prioritize non-threaded WASM
+
+const statusElement = document.getElementById('status');
+const vowelElement = document.getElementById('vowel');
+const genderElement = document.getElementById('gender');
+const startRecordingButton = document.getElementById('startRecording');
+const stopRecordingButton = document.getElementById('stopRecording');
+const audioPlayback = document.getElementById('audioPlayback');
+const downloadLink = document.getElementById('downloadLink');
+
+let session;
+const modelPath = '/vocalis.onnx'; // Relative to public folder
+
+const EXPECTED_SAMPLE_RATE = 16000;
+const RECORDING_DURATION_MS = 500; // 0.5 seconds
+const EXPECTED_AUDIO_LENGTH = EXPECTED_SAMPLE_RATE * (RECORDING_DURATION_MS / 1000); // 8000 samples
+
+let mediaRecorder;
+let audioChunks = [];
+let audioContext;
+let audioProcessor;
+
+async function loadModel() {
+    statusElement.textContent = 'Status: Loading model...';
+    try {
+        session = await ort.InferenceSession.create(modelPath);
+        statusElement.textContent = 'Status: Model loaded. Ready to record.';
+        console.log('ONNX model loaded:', session);
+        // Enable buttons only after model is loaded and microphone access is granted
+        // For now, enable recording button
+        startRecordingButton.disabled = false;
+    } catch (e) {
+        statusElement.textContent = `Status: Error loading model: ${e.message}`;
+        console.error('Error loading ONNX model:', e);
+    }
+}
+
+async function startRecording() {
+    statusElement.textContent = 'Status: Requesting microphone access...';
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        console.log('Microphone access granted');
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = event => {
+            audioChunks.push(event.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+            console.log('Recorder stopped. Processing audio...');
+            statusElement.textContent = 'Status: Recording stopped. Processing audio...';
+            const audioBlob = new Blob(audioChunks, { 'type' : 'audio/webm; codecs=opus' });
+            
+            try {
+                // Convert Blob to AudioBuffer
+                const arrayBuffer = await audioBlob.arrayBuffer();
+                const decodedAudio = await audioContext.decodeAudioData(arrayBuffer);
+                console.log(`Audio decoded. Sample rate: ${decodedAudio.sampleRate}, Length: ${decodedAudio.length}`);
+
+                // Resample and convert to mono if necessary
+                const processedAudio = processAudio(decodedAudio, audioContext.sampleRate, EXPECTED_SAMPLE_RATE);
+                console.log(`Audio processed. New length: ${processedAudio.length}`);
+                
+                if (processedAudio.length !== EXPECTED_AUDIO_LENGTH) {
+                    statusElement.textContent = `Status: Error: Processed audio length mismatch. Expected ${EXPECTED_AUDIO_LENGTH}, got ${processedAudio.length}.`;
+                    console.error('Processed audio length mismatch:', processedAudio.length);
+                    return;
+                }
+
+                // --- DEBUG: Generate WAV for playback and download ---
+                const wavBlob = encodeWAV(processedAudio, EXPECTED_SAMPLE_RATE);
+                const audioUrl = URL.createObjectURL(wavBlob);
+                audioPlayback.src = audioUrl;
+                
+                downloadLink.href = audioUrl;
+                downloadLink.download = `debug_audio_${new Date().getTime()}.wav`;
+                downloadLink.style.display = 'block';
+                downloadLink.textContent = `Download Processed WAV (${processedAudio.length} samples)`;
+                // ---------------------------------------------------
+
+                // Run inference
+                await runInference(processedAudio);
+            } catch (err) {
+                console.error('Error processing audio:', err);
+                statusElement.textContent = `Status: Error processing audio: ${err.message}`;
+            } finally {
+                // Stop all tracks in the stream to release mic
+                stream.getTracks().forEach(track => track.stop());
+                startRecordingButton.disabled = false;
+                stopRecordingButton.disabled = true;
+            }
+        };
+
+        mediaRecorder.start(); 
+        console.log('Recording started');
+        statusElement.textContent = `Status: Recording for ${RECORDING_DURATION_MS / 1000} seconds...`;
+        startRecordingButton.disabled = true;
+        stopRecordingButton.disabled = false;
+
+        // Stop recording automatically after duration
+        setTimeout(() => {
+            if (mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                console.log('Recording stopped via timeout');
+            }
+        }, RECORDING_DURATION_MS);
+
+    } catch (e) {
+        statusElement.textContent = `Status: Error accessing microphone: ${e.message}`;
+        console.error('Error accessing microphone:', e);
+        startRecordingButton.disabled = false;
+        stopRecordingButton.disabled = true;
+    }
+}
+
+function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
+    // 1. Downmix to Mono
+    let data = audioBuffer.getChannelData(0);
+    if (audioBuffer.numberOfChannels > 1) {
+        const monoData = new Float32Array(audioBuffer.length);
+        for (let i = 0; i < audioBuffer.length; i++) {
+            let sum = 0;
+            for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+                sum += audioBuffer.getChannelData(ch)[i];
+            }
+            monoData[i] = sum / audioBuffer.numberOfChannels;
+        }
+        data = monoData;
+    }
+
+    // 2. Resample to Target Rate (16kHz)
+    if (originalSampleRate !== targetSampleRate) {
+        const ratio = originalSampleRate / targetSampleRate;
+        const newLength = Math.round(data.length / ratio);
+        const resampledData = new Float32Array(newLength);
+        for (let i = 0; i < newLength; i++) {
+            const index = i * ratio;
+            const floor = Math.floor(index);
+            const ceil = Math.ceil(index);
+            const frac = index - floor;
+            if (ceil < data.length) {
+                 resampledData[i] = data[floor] * (1 - frac) + data[ceil] * frac;
+            } else {
+                 resampledData[i] = data[floor];
+            }
+        }
+        data = resampledData;
+    }
+
+    // 3. High-Pass Filter (Simple IIR ~80Hz @ 16kHz)
+    // Removes DC offset and low rumble noise
+    const alpha = 0.97; 
+    const filteredData = new Float32Array(data.length);
+    filteredData[0] = data[0];
+    for (let i = 1; i < data.length; i++) {
+        filteredData[i] = alpha * (filteredData[i-1] + data[i] - data[i-1]);
+    }
+    data = filteredData;
+
+    // 4. Smart Centering / Cropping
+    // Instead of naive center crop, find the loudest part of the audio
+    if (data.length > EXPECTED_AUDIO_LENGTH) {
+        // Scan for the loudest 50ms window to find the "center" of the voice
+        const scanWindow = Math.floor(targetSampleRate * 0.05); // 50ms
+        let maxEnergy = 0;
+        let bestCenterIndex = Math.floor(data.length / 2);
+
+        // Scan with a step for speed
+        for (let i = 0; i < data.length - scanWindow; i += 100) {
+            let currentEnergy = 0;
+            for (let j = 0; j < scanWindow; j++) {
+                currentEnergy += Math.abs(data[i + j]);
+            }
+            if (currentEnergy > maxEnergy) {
+                maxEnergy = currentEnergy;
+                bestCenterIndex = i + (scanWindow / 2);
+            }
+        }
+
+        // Calculate start index to center the expected length around the best center
+        let startIndex = Math.floor(bestCenterIndex - (EXPECTED_AUDIO_LENGTH / 2));
+        
+        // Clamp indices to keep within bounds
+        startIndex = Math.max(0, Math.min(startIndex, data.length - EXPECTED_AUDIO_LENGTH));
+        
+        data = data.slice(startIndex, startIndex + EXPECTED_AUDIO_LENGTH);
+    } else if (data.length < EXPECTED_AUDIO_LENGTH) {
+        // Pad symmetrically with zeros if too short
+        const totalPadding = EXPECTED_AUDIO_LENGTH - data.length;
+        const padLeft = Math.floor(totalPadding / 2);
+        const padded = new Float32Array(EXPECTED_AUDIO_LENGTH).fill(0);
+        padded.set(data, padLeft);
+        data = padded;
+    }
+
+    // 5. Peak Normalization
+    // Scale audio so max amplitude is 0.95 (prevents clipping but ensures good volume)
+    let maxVal = 0;
+    for (let i = 0; i < data.length; i++) {
+        if (Math.abs(data[i]) > maxVal) maxVal = Math.abs(data[i]);
+    }
+    if (maxVal > 0) {
+        const scale = 0.95 / maxVal;
+        for (let i = 0; i < data.length; i++) {
+            data[i] *= scale;
+        }
+    }
+
+    return data;
+}
+
+async function runInference(audioData) {
+    statusElement.textContent = 'Status: Running inference...';
+    vowelElement.textContent = '';
+    genderElement.textContent = '';
+
+    try {
+        // Create input tensor
+        const inputTensor = new ort.Tensor('float32', audioData, [1, EXPECTED_AUDIO_LENGTH]);
+        
+        // Run inference
+        const feeds = { waveform: inputTensor }; // 'waveform' is the input name defined in export_onnx.py
+        const results = await session.run(feeds);
+
+        // Process results
+        const vowelLogits = results.vowel_logits.data; // 'vowel_logits' is the output name
+        const genderLogits = results.gender_logits.data; // 'gender_logits' is the output name
+
+        // Find argmax for vowel
+        let maxVowelLogit = -Infinity;
+        let vowelIndex = 0;
+        for (let i = 0; i < vowelLogits.length; i++) {
+            if (vowelLogits[i] > maxVowelLogit) {
+                maxVowelLogit = vowelLogits[i];
+                vowelIndex = i;
+            }
+        }
+
+        // Find argmax for gender
+        let maxGenderLogit = -Infinity;
+        let genderIndex = 0;
+        for (let i = 0; i < genderLogits.length; i++) {
+            if (genderLogits[i] > maxGenderLogit) {
+                maxGenderLogit = genderLogits[i];
+                genderIndex = i;
+            }
+        }
+        
+        const VOWEL_LABELS = ["a", "e", "i", "o", "u"];
+        const GENDER_LABELS = ["M", "F"];
+
+        vowelElement.textContent = VOWEL_LABELS[vowelIndex];
+        genderElement.textContent = GENDER_LABELS[genderIndex];
+        statusElement.textContent = 'Status: Inference complete. Ready to record.';
+
+        console.log('Vowel Logits:', vowelLogits);
+        console.log('Gender Logits:', genderLogits);
+        console.log(`Prediction: Vowel = ${VOWEL_LABELS[vowelIndex]}, Gender = ${GENDER_LABELS[genderIndex]}`);
+
+    } catch (e) {
+        statusElement.textContent = `Status: Error during inference: ${e.message}`;
+        console.error('Error during inference:', e);
+    }
+}
+
+// --- WAV Helper Functions ---
+function encodeWAV(samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    /* RIFF identifier */
+    writeString(view, 0, 'RIFF');
+    /* file length */
+    view.setUint32(4, 36 + samples.length * 2, true);
+    /* RIFF type */
+    writeString(view, 8, 'WAVE');
+    /* format chunk identifier */
+    writeString(view, 12, 'fmt ');
+    /* format chunk length */
+    view.setUint32(16, 16, true);
+    /* sample format (raw) */
+    view.setUint16(20, 1, true);
+    /* channel count */
+    view.setUint16(22, 1, true);
+    /* sample rate */
+    view.setUint32(24, sampleRate, true);
+    /* byte rate (sample rate * block align) */
+    view.setUint32(28, sampleRate * 2, true);
+    /* block align (channel count * bytes per sample) */
+    view.setUint16(32, 2, true);
+    /* bits per sample */
+    view.setUint16(34, 16, true);
+    /* data chunk identifier */
+    writeString(view, 36, 'data');
+    /* data chunk length */
+    view.setUint32(40, samples.length * 2, true);
+
+    floatTo16BitPCM(view, 44, samples);
+
+    return new Blob([view], { type: 'audio/wav' });
+}
+
+function floatTo16BitPCM(output, offset, input) {
+    for (let i = 0; i < input.length; i++, offset += 2) {
+        let s = Math.max(-1, Math.min(1, input[i]));
+        s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        output.setInt16(offset, s, true);
+    }
+}
+
+function writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+    }
+}
+// ---------------------------
+
+startRecordingButton.addEventListener('click', startRecording);
+stopRecordingButton.addEventListener('click', stopRecording);
+
+// Disable buttons until model is loaded
+startRecordingButton.disabled = true;
+stopRecordingButton.disabled = true;
+
+loadModel();
+
+// Basic styling (Vite's default creates an app.css)
+import './style.css'

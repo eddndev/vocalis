@@ -5,7 +5,7 @@ from model import VocalisNet
 
 # Configuración
 MODEL_PATH = "train_lab/best_vocalis_model.pth"
-ONNX_PATH = "models/vocalis_model.onnx"
+ONNX_PATH = "models/vocalis.onnx"
 
 class EndToEndVocalis(nn.Module):
     def __init__(self, base_model_path):
@@ -57,7 +57,7 @@ def export_e2e():
     
     print(f"Exportando modelo End-to-End a {ONNX_PATH}...")
     
-    # opset_version=17 es necesario para operaciones STFT (ShortTimeFourierTransform)
+    # opset_version=18 para evitar errores de conversión y compatibilidad moderna
     torch.onnx.export(
         model_e2e,
         dummy_waveform,
@@ -65,14 +65,29 @@ def export_e2e():
         verbose=False,
         input_names=['waveform'],
         output_names=['vowel_logits', 'gender_logits'],
-        opset_version=17, 
+        opset_version=18, 
         dynamic_axes={
             'waveform': {0: 'batch_size', 1: 'samples'}, # Longitud variable permitida
             'vowel_logits': {0: 'batch_size'},
             'gender_logits': {0: 'batch_size'}
         }
     )
-    print("¡Exportación End-to-End exitosa!")
+    
+    print("Optimizando y consolidando archivo ONNX...")
+    # Post-procesamiento: Cargar y guardar para asegurar un solo archivo (si < 2GB)
+    # Esto elimina la necesidad de scripts externos para corrección de datos
+    import onnx
+    model = onnx.load(ONNX_PATH)
+    
+    # Verificar si el modelo es válido
+    onnx.checker.check_model(model)
+    
+    # Guardar forzando (por defecto onnx.save inscribe los datos si es posible)
+    onnx.save_model(model, ONNX_PATH)
+    
+    import os
+    size_mb = os.path.getsize(ONNX_PATH) / (1024 * 1024)
+    print(f"¡Exportación End-to-End exitosa! Modelo guardado en {ONNX_PATH} ({size_mb:.2f} MB)")
 
 if __name__ == "__main__":
     export_e2e()

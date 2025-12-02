@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vocalis Web Client</title>
+    <style>
+      body { font-family: sans-serif; margin: 20px; }
+      #status { margin-top: 10px; font-weight: bold; }
+      #results { margin-top: 20px; }
+    </style>
+  </head>
+  <body>
+    <h1>Vocalis Audio Analyzer</h1>
+    <button id="startRecording">Start Recording</button>
+    <button id="stopRecording" disabled>Stop Recording</button>
+    <p id="status">Status: Ready</p>
+    <div id="results">
+      <h2>Prediction:</h2>
+      <p>Vowel: <span id="vowel"></span></p>
+      <p>Gender: <span id="gender"></span></p>
+      
+      <hr/>
+      <h3>Debug Processed Audio</h3>
+      <p>Listen to exactly what was sent to the model (0.5s @ 16kHz):</p>
+      <audio id="audioPlayback" controls style="width: 100%;"></audio>
+      <br/>
+      <a id="downloadLink" style="display: none;">Download Processed WAV</a>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

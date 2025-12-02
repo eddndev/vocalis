@@ -4,3 +4,4 @@
 # Excepciones (Archivos que SÍ queremos en el repo)
 !README.md
 !.gitignore
+!clasificacion.txt

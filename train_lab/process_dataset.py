@@ -1,38 +1,39 @@
 import os
 import glob
 import numpy as np
-import parselmouth
-from parselmouth.praat import call
 import librosa
 import soundfile as sf
 from tqdm import tqdm
+import json # Import json
 
 # Configuración
 DATA_ROOT = "data"
 OUTPUT_DIR = "train_lab/dataset"
 OUTPUT_AUDIO_DIR = os.path.join(OUTPUT_DIR, "audio")
 METADATA_FILE = os.path.join(OUTPUT_DIR, "metadata.csv")
+SPEAKERS_JSON_FILE = "train_lab/speakers.json" # Define the speakers JSON file
 SAMPLE_RATE = 16000
 
 # Vocales objetivo (Nivel T22)
 VALID_VOWELS = {'a', 'e', 'i', 'o', 'u'}
 
-def detect_gender(wav_path):
-    """
-    Detecta género estimando el Pitch promedio.
-    < 165Hz = Hombre (M), > 165Hz = Mujer (F)
-    """
-    try:
-        sound = parselmouth.Sound(wav_path)
-        pitch = sound.to_pitch()
-        mean_pitch = call(pitch, "Get mean", 0, 0, "Hertz")
+# Remove detect_gender function as it's replaced by direct lookup
+# def detect_gender(wav_path):
+#     """
+#     Detecta género estimando el Pitch promedio.
+#     < 165Hz = Hombre (M), > 165Hz = Mujer (F)
+#     """
+#     try:
+#         sound = parselmouth.Sound(wav_path)
+#         pitch = sound.to_pitch()
+#         mean_pitch = call(pitch, "Get mean", 0, 0, "Hertz")
         
-        if np.isnan(mean_pitch):
-            return "U"
+#         if np.isnan(mean_pitch):
+#             return "U"
             
-        return "M" if mean_pitch < 165 else "F"
-    except Exception:
-        return "U"
+#         return "M" if mean_pitch < 165 else "F"
+#     except Exception:
+#         return "U"
 
 def parse_phn_file(phn_path):
     """
@@ -117,6 +118,15 @@ def main():
     f_meta = open(METADATA_FILE, 'w')
     f_meta.write("filename,label_vowel,label_gender,speaker_id\n")
     
+    # Load speaker gender map
+    if not os.path.exists(SPEAKERS_JSON_FILE):
+        print(f"Error: No se encontró el archivo de clasificación de locutores: {SPEAKERS_JSON_FILE}")
+        print("Por favor, ejecuta el script de clasificación manual primero.")
+        return
+
+    with open(SPEAKERS_JSON_FILE, 'r', encoding='utf-8') as f:
+        speakers_map = json.load(f)
+
     speakers = [d for d in os.listdir(DATA_ROOT) if d.startswith('s') and os.path.isdir(os.path.join(DATA_ROOT, d))]
     print(f"Procesando {len(speakers)} locutores...")
     
@@ -125,14 +135,11 @@ def main():
     for spk in tqdm(speakers):
         spk_path = os.path.join(DATA_ROOT, spk)
         
-        # 1. Detectar Género
-        # Buscamos un wav de muestra
-        sample_wavs = glob.glob(os.path.join(spk_path, "audio_editado", "**", "*.wav"), recursive=True)
-        if not sample_wavs:
-            continue
+        # 1. Obtener Género desde el mapa
+        gender = speakers_map.get(spk, "U") # Default to 'U' (Unknown) if not found in map
+        if gender == "U":
+            print(f"Advertencia: Locutor {spk} no encontrado en speakers.json. Se usará 'U' para género.")
             
-        gender = detect_gender(sample_wavs[0])
-        
         # 2. Procesar archivos (Comunes e Individuales)
         for sub in ["comunes", "individuales"]:
             wav_dir = os.path.join(spk_path, "audio_editado", sub)
