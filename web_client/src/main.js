@@ -1,8 +1,4 @@
-import * as ort from 'onnxruntime-web';
-
-// Configure ONNX Runtime Web
-ort.env.wasm.wasmPaths = "/";
-ort.env.wasm.executionProviders = ['wasm-simd', 'wasm']; // Prioritize non-threaded WASM
+import init, { predict_vowel, init_vocalis } from '../pkg/vocalis_core';
 
 const statusElement = document.getElementById('status');
 const vowelElement = document.getElementById('vowel');
@@ -14,9 +10,6 @@ const downloadLink = document.getElementById('downloadLink');
 const canvas = document.getElementById('visualizer');
 const canvasCtx = canvas.getContext('2d');
 
-let session;
-const modelPath = '/vocalis.onnx'; // Relative to public folder
-
 const EXPECTED_SAMPLE_RATE = 16000;
 const RECORDING_DURATION_MS = 500; // 0.5 seconds
 const EXPECTED_AUDIO_LENGTH = EXPECTED_SAMPLE_RATE * (RECORDING_DURATION_MS / 1000); // 8000 samples
@@ -24,22 +17,20 @@ const EXPECTED_AUDIO_LENGTH = EXPECTED_SAMPLE_RATE * (RECORDING_DURATION_MS / 10
 let mediaRecorder;
 let audioChunks = [];
 let audioContext;
-let audioProcessor;
 let analyser;
 let visualizerFrameId;
 
 async function loadModel() {
-    statusElement.textContent = 'Status: Loading model...';
+    statusElement.textContent = 'Status: Loading WASM module...';
     try {
-        session = await ort.InferenceSession.create(modelPath);
-        statusElement.textContent = 'Status: Model loaded. Ready to record.';
-        console.log('ONNX model loaded:', session);
-        // Enable buttons only after model is loaded and microphone access is granted
-        // For now, enable recording button
+        await init(); // Initialize the WASM module
+        init_vocalis(); // Initialize the Rust model singleton
+        statusElement.textContent = 'Status: WASM module loaded. Ready to record.';
+        console.log('Vocalis WASM module loaded.');
         startRecordingButton.disabled = false;
     } catch (e) {
-        statusElement.textContent = `Status: Error loading model: ${e.message}`;
-        console.error('Error loading ONNX model:', e);
+        statusElement.textContent = `Status: Error loading WASM module: ${e.message}`;
+        console.error('Error loading WASM module:', e);
     }
 }
 
@@ -129,7 +120,7 @@ async function startRecording() {
                 downloadLink.textContent = `Download Processed WAV (${processedAudio.length} samples)`;
                 // ---------------------------------------------------
 
-                // Run inference
+                // Run inference with WASM
                 await runInference(processedAudio);
             } catch (err) {
                 console.error('Error processing audio:', err);
@@ -261,116 +252,23 @@ function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
 }
 
 async function runInference(audioData) {
-    statusElement.textContent = 'Status: Running ONNX inference for Vowel...';
+    statusElement.textContent = 'Status: Running WASM inference...';
     vowelElement.textContent = '';
-    
-    // Perform DSP-based gender classification
-    const sr = EXPECTED_SAMPLE_RATE; // Sample rate for audioData
-    const genderPrediction = classifyGenderDSP(audioData, sr);
-    genderElement.textContent = genderPrediction;
+    genderElement.textContent = '';
     
     try {
-        // Create input tensor for Vowel prediction
-        const inputTensor = new ort.Tensor('float32', audioData, [1, EXPECTED_AUDIO_LENGTH]);
-        
-        // Run ONNX inference for Vowel
-        const feeds = { waveform: inputTensor };
-        const results = await session.run(feeds);
+        const rawResult = await predict_vowel(audioData, EXPECTED_SAMPLE_RATE);
+        const prediction = JSON.parse(rawResult);
 
-        // Process results for Vowel
-        const vowelLogits = results.vowel_logits.data;
-        let maxVowelLogit = -Infinity;
-        let vowelIndex = 0;
-        for (let i = 0; i < vowelLogits.length; i++) {
-            if (vowelLogits[i] > maxVowelLogit) {
-                maxVowelLogit = vowelLogits[i];
-                vowelIndex = i;
-            }
-        }
-        
-        const VOWEL_LABELS = ["a", "e", "i", "o", "u"];
-        vowelElement.textContent = VOWEL_LABELS[vowelIndex];
+        vowelElement.textContent = prediction.vowel;
+        genderElement.textContent = prediction.gender;
         statusElement.textContent = 'Status: Inference complete. Ready to record.';
 
-        console.log('Vowel Logits:', vowelLogits);
-        console.log(`Prediction: Vowel = ${VOWEL_LABELS[vowelIndex]}, Gender = ${genderPrediction} (DSP)`);
+        console.log('Prediction:', prediction);
 
     } catch (e) {
-        statusElement.textContent = `Status: Error during ONNX inference: ${e.message}`;
-        console.error('Error during ONNX inference:', e);
-    }
-}
-
-// Function to estimate F0 (Pitch) from audio data in JavaScript
-function getPitch(audioData, sr) {
-    // Implementación simplificada de detección de pitch (autocorrelación)
-    // Esto es una aproximación, no un pyin completo como librosa,
-    // pero debería ser suficiente para la distinción M/F.
-
-    // Parámetros básicos de autocorrelación para pitch
-    const FMIN = 50; // Hz
-    const FMAX = 400; // Hz
-    const HOP_LENGTH = 512;
-    const WIN_LENGTH = 2048; // Ventana de análisis
-    
-    let pitches = [];
-    
-    // Dividir audio en ventanas
-    for (let i = 0; i < audioData.length - WIN_LENGTH; i += HOP_LENGTH) {
-        const window = audioData.slice(i, i + WIN_LENGTH);
-        
-        // Autocorrelación (simplified)
-        // Podríamos usar FFT -> Inverse FFT para una mejor autocorrelación,
-        // pero una directa es más simple para JS puro.
-        const r = new Float32Array(WIN_LENGTH);
-        for (let lag = 0; lag < WIN_LENGTH; lag++) {
-            for (let j = 0; j < WIN_LENGTH - lag; j++) {
-                r[lag] += window[j] * window[j + lag];
-            }
-        }
-        
-        // Buscar el pico en el rango de frecuencia deseado
-        let maxCorr = -1;
-        let bestLag = -1;
-        
-        // Convertir FMIN/FMAX a lags
-        const minLag = Math.floor(sr / FMAX);
-        const maxLag = Math.floor(sr / FMIN);
-
-        for (let lag = minLag; lag <= maxLag; lag++) {
-            if (r[lag] > maxCorr) {
-                maxCorr = r[lag];
-                bestLag = lag;
-            }
-        }
-        
-        if (bestLag > 0) {
-            pitches.push(sr / bestLag);
-        }
-    }
-    
-    // Mediana de los pitches encontrados
-    if (pitches.length > 0) {
-        pitches.sort((a, b) => a - b);
-        return pitches[Math.floor(pitches.length / 2)];
-    }
-    return 0; // No pitch found
-}
-
-// Function to classify gender using DSP features (F0)
-function classifyGenderDSP(audioData, sr) {
-    const f0 = getPitch(audioData, sr);
-    console.log('Detected F0 (Pitch):', f0);
-
-    // Decision rule from our trained classifier: f0 <= 178.70
-    if (f0 > 0) { // Only classify if a pitch was detected
-        if (f0 <= 178.70) {
-            return "M (DSP)";
-        } else {
-            return "F (DSP)";
-        }
-    } else {
-        return "Unknown (DSP - No Pitch)";
+        statusElement.textContent = `Status: Error during WASM inference: ${e.message}`;
+        console.error('Error during WASM inference:', e);
     }
 }
 
