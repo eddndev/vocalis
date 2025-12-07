@@ -52,5 +52,24 @@ El modelo femenino mostró un desempeño incluso superior, rozando el 98% de pre
 
 ## 4.4. Conclusión
 
-La migración a una arquitectura puramente DSP ha resultado en una mejora dramática del rendimiento (+37% respecto a V2). La combinación de **MFCCs normalizados por canal (CMN)** y **SVMs dependientes del género** proporciona una solución que es a la vez extremadamente precisa, computacionalmente eficiente y teóricamente sólida.
+La migración a una arquitectura puramente DSP ha resultado en una mejora dramática del rendimiento (+37% respecto a V2). La combinación de **MFCCs con Estandarización Global** y **SVMs dependientes del género** proporciona una solución que es a la vez extremadamente precisa, computacionalmente eficiente y teóricamente sólida.
+
+## 4.5. Desafíos de Implementación y Soluciones Críticas
+
+Durante la fase de integración entre el entorno de investigación (Python) y el motor de producción (Rust/WASM), se identificaron y superaron dos obstáculos técnicos mayores:
+
+### 1. La Paradoja de la Vocal Estacionaria (Fallo de CMN)
+*   **Problema:** Inicialmente se utilizó *Cepstral Mean Normalization* (CMN) para normalizar el audio. Se descubrió que para vocales sostenidas (señales estacionarias), la operación $\text{Señal} - \text{Media}(\text{Señal})$ tiende matemáticamente a cero, eliminando la información fonética y generando vectores nulos ("Vectores Zero").
+*   **Solución:** Se reemplazó la CMN local por una **Estandarización Global**, utilizando las estadísticas ($\mu, \sigma$) de todo el corpus de entrenamiento para normalizar cada input, preservando así la identidad de la vocal.
+
+### 2. Discrepancia en el Banco de Filtros Mel
+*   **Problema:** Se observaron predicciones caóticas en el cliente web a pesar de una alta precisión teórica. La causa raíz fue una divergencia en la configuración del extractor de características:
+    *   *Python (Librosa):* Default `n_mels=128`, Escala Slaney.
+    *   *Rust (DSP Core):* Configurado `n_mels=40`, Escala HTK.
+*   **Solución:** Se alineó el stack configurando explícitamente Python para usar **40 filtros Mel** y la fórmula **HTK**, regenerando el dataset completo para garantizar una correspondencia matemática 1:1 entre entrenamiento e inferencia.
+
+### 3. Alineación Espectral (El "Bug del Factor 2" en FFT)
+*   **Problema:** Tras corregir n_mels, la precisión seguía siendo 0% en validación cruzada. Se descubrió mediante un script de depuración comparativo (`validate_model.rs`) que la fórmula usada para mapear frecuencias a bins de FFT en Rust era `bin = freq * N_FFT / (SR/2)`. Esto mapeaba el banco de filtros al doble de su tamaño real (Nyquist en el bin 1025 en vez de 512).
+*   **Solución:** Corrección de la fórmula a `bin = freq * N_FFT / SR`. Adicionalmente, se ajustó el ventaneo a **Hann** (para igualar Librosa) y se implementó un "Energy Neutralizer" en inferencia para mitigar diferencias de ganancia de micrófono.
+*   **Resultado:** Precisión validada de **80-100%** en muestras de test reales.
 

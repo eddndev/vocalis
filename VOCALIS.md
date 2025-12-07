@@ -436,3 +436,15 @@ El entregable deseado es una arquitectura DSP que garantice **determinismo, expl
 **Recursos Adjuntos:**
 *   `dsp_lab/results/vocales_spectrum.png`
 *   `dsp_lab/results/genero_spectrum.png`
+
+Prueba de 5 vocales a 10 intentos:
+
+a: aM aM aM aM aM aM uM aM aM aM
+ 
+e: eM eM eM eM oM eM eM iM eM eM
+
+i: iM iM iM iM iM iM iM iF iM iM
+
+o: uM aM oM oM oM uM uM uM uM uM
+
+u: uM uM uM uM uM uM uM uM uM uM

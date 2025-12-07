@@ -68,7 +68,9 @@ impl DspProcessor {
         let n = frame.len();
         if n == 0 { return; }
         for i in 0..n {
-            let window_val = 0.54 - 0.46 * (2.0 * PI * i as f32 / (n - 1) as f32).cos();
+            // Changed to HANN window to match Librosa default
+            // Formula: 0.5 * (1 - cos(2*pi*n/(N-1)))
+            let window_val = 0.5 * (1.0 - (2.0 * PI * i as f32 / (n - 1) as f32).cos());
             frame[i] *= window_val;
         }
     }
@@ -79,7 +81,7 @@ impl DspProcessor {
 
         self.fft_forward.process(&mut buffer);
 
-        // Compute power spectrum (magnitude squared) for the first N_FFT / 2 + 1 bins
+        // Compute power spectrum (magnitude squared)
         let num_bins = self.n_fft / 2 + 1;
         buffer[0..num_bins].iter().map(|c| c.norm_sqr()).collect()
     }
@@ -97,8 +99,11 @@ impl DspProcessor {
         }
 
         // Convert Mel points to FFT bin numbers
+        // BUG FIX: Correct mapping implies indices within 0..N_FFT/2
+        // Formula: bin = freq * (N_FFT + 1) / SampleRate
+        // (Using N_FFT+1 to closely match Librosa's linspace behavior logic)
         let fft_bins: Vec<usize> = mel_points.iter()
-            .map(|&p| (self.n_fft as f32 + 1.0) * p / max_freq)
+            .map(|&p| p * (self.n_fft as f32 + 1.0) / self.sample_rate as f32)
             .map(|p| p.floor() as usize)
             .collect();
 

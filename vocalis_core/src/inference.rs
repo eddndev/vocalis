@@ -6,7 +6,15 @@ impl Predictor {
     /// Aplica la normalización (StandardScaler) al vector de entrada
     /// x_scaled = (x - mean) / scale
     pub fn normalize(features: &[f32], model: &GenderModel) -> Vec<f32> {
-        features.iter()
+        // HACK: Neutralizar C0 (Energía/Volumen)
+        // El volumen del navegador puede variar mucho respecto al entrenamiento.
+        // Al forzar C0 = media, anulamos su efecto en el SVM.
+        let mut feats = features.to_vec();
+        if !feats.is_empty() && !model.scaler.mean.is_empty() {
+            feats[0] = model.scaler.mean[0];
+        }
+
+        feats.iter()
             .zip(model.scaler.mean.iter())
             .zip(model.scaler.scale.iter())
             .map(|((&x, &m), &s)| (x - m) / s)

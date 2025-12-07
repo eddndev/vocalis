@@ -40,7 +40,7 @@ def train_gender_specific_model(df, gender_label):
     
     pipeline = Pipeline([
         ('scaler', StandardScaler()),
-        ('svm', SVC(C=10, gamma='scale', kernel='rbf', probability=True))
+        ('svm', SVC(C=10, gamma='scale', kernel='rbf', probability=True, cache_size=1000))
     ])
     
     print("Entrenando modelo (Configuración rápida: C=10, gamma=scale)...")

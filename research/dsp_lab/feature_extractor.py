@@ -43,7 +43,7 @@ def get_features(y, sr=16000):
     # n_mfcc=13 es el estándar para voz
     # n_fft=1024, hop_length=256 (16ms)
     # IMPORTANTE: n_mels=40 y htk=True para coincidir EXACTAMENTE con Rust (dsp.rs)
-    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_mels=40, width=None, htk=True, n_fft=1024, hop_length=256)
+    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_mels=40, htk=True, n_fft=1024, hop_length=256)
     
     # A. Normalización del Canal (CMN) ESTRATEGIA ACTUALIZADA:
     # Para vocales aisladas, CMN local anula la señal. 

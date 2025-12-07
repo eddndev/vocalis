@@ -10,49 +10,43 @@ use dsp::DspProcessor;
 // Singleton para mantener el modelo en memoria
 static MODEL: OnceLock<VocalisModel> = OnceLock::new();
 
-// Incrustamos el JSON en el binario (Compilación estática)
-// Asegúrate de que la ruta sea correcta relativa al crate root
+// Incrustamos el JSON en el binario
 const MODEL_JSON: &str = include_str!("../../research/dsp_lab/models/vocalis_model.json");
 
-#[wasm_bindgen]
-pub fn init_vocalis() -> Result<(), JsValue> {
-    // Configurar hook de pánico para debugging en consola
-    console_error_panic_hook::set_once();
-    
-    // Cargar y parsear el modelo una sola vez
+// Macro de logging híbrido (WASM vs Native)
+macro_rules! log {
+    ($($t:tt)*) => {
+        #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&format!($($t)*).into());
+        #[cfg(not(target_arch = "wasm32"))]
+        println!($($t)*);
+    }
+}
+
+// --- LÓGICA INTERNA (Pure Rust) ---
+// Funciona en Windows (Tests) y en Web
+
+pub fn init_vocalis_internal() -> Result<(), String> {
     if MODEL.get().is_none() {
         let model: VocalisModel = serde_json::from_str(MODEL_JSON)
-            .map_err(|e| JsValue::from_str(&format!("Error parsing model JSON: {}", e)))?;
+            .map_err(|e| format!("Error parsing model JSON: {}", e))?;
             
-        MODEL.set(model).map_err(|_| JsValue::from_str("Model already initialized"))?;
+        MODEL.set(model).map_err(|_| "Model already initialized".to_string())?;
         
-        web_sys::console::log_1(&"Vocalis Core (Rust) Initialized!".into());
+        log!("Vocalis Core (Rust) Initialized!");
     }
-    
     Ok(())
 }
 
-#[wasm_bindgen]
-pub fn predict_vowel(audio_data: &[f32], sample_rate: f32) -> Result<String, JsValue> {
+pub fn predict_vowel_internal(audio_data: &[f32], sample_rate: f32) -> Result<String, String> {
     let model = MODEL.get().ok_or("Model not initialized. Call init_vocalis() first.")?;
     
     // Initialize DSP Processor
     let dsp_processor = DspProcessor::new(sample_rate as u32, model.model_male.svm.support_vectors[0].len());
-    let pre_emphasis_coeff = 0.0; // Disabled to match librosa.feature.mfcc defaults
+    let pre_emphasis_coeff = 0.0; // Disabled to match Python librosa features
 
-    // --- DEBUG: Synthetic 150Hz Sine Wave (matches Python debug script) ---
-    // let mut audio_data_synth = Vec::with_capacity(8000);
-    // let duration = 0.5;
-    // let samples = (sample_rate * duration) as usize;
-    // for i in 0..samples {
-    //     let t = i as f32 / sample_rate;
-    //     let sample = 0.5 * (2.0 * std::f32::consts::PI * 150.0 * t).sin();
-    //     audio_data_synth.push(sample);
-    // }
-    // let audio_data = &audio_data_synth; // Override input
-    // web_sys::console::log_1(&format!("DEBUG: Using Synthetic 150Hz Sine Wave (Max: {:.2})", 0.5).into());
-    // ----------------------------------------------------------------------
-
+    // --- DEBUG SILENCIADO PARA RELEASE/TEST ---
+    
     let mut all_mfccs: Vec<Vec<f32>> = Vec::new();
 
     // Frame the audio and extract features
@@ -70,11 +64,11 @@ pub fn predict_vowel(audio_data: &[f32], sample_rate: f32) -> Result<String, JsV
     }
 
     if all_mfccs.is_empty() {
-        return Err(JsValue::from_str("No valid audio frames to process."));
+        return Err("No valid audio frames to process.".to_string());
     }
 
-    // Debug: Log Raw MFCCs of first frame
-    web_sys::console::log_1(&format!("RAW MFCCs (First Frame): {:?}", &all_mfccs[0]).into());
+    // Debug: Log Raw MFCCs of first frame (solo si es muy necesario)
+    // log!("RAW MFCCs (First Frame): {:?}", &all_mfccs[0]);
 
     // Bag-of-Frames: Average MFCCs across all frames
     let mut averaged_mfccs = vec![0.0f32; dsp_processor.n_mfcc];
@@ -90,9 +84,8 @@ pub fn predict_vowel(audio_data: &[f32], sample_rate: f32) -> Result<String, JsV
     // 1. DSP: Extraer Features (MFCC + Pitch)
     let f0 = dsp_processor.compute_pitch(audio_data);
     
-    // Debug logging
-    web_sys::console::log_1(&format!("Detected F0: {:.2} Hz", f0).into());
-    web_sys::console::log_1(&format!("Averaged MFCCs (first 5): {:?}", &averaged_mfccs[0..5]).into());
+    log!("Detected F0: {:.2} Hz", f0);
+    log!("Averaged MFCCs (first 5): {:?}", &averaged_mfccs[0..5]);
 
     // Replace the simulated MFCCs with the averaged ones
     let mfccs_for_prediction = averaged_mfccs; 
@@ -109,7 +102,6 @@ pub fn predict_vowel(audio_data: &[f32], sample_rate: f32) -> Result<String, JsV
     };
     
     // 4. Inferencia SVM
-    // Pasamos los MFCCs al predictor
     let vowel = inference::Predictor::predict(&mfccs_for_prediction, svm_model);
     
     let result = PredictionResult {
@@ -118,5 +110,21 @@ pub fn predict_vowel(audio_data: &[f32], sample_rate: f32) -> Result<String, JsV
     };
 
     serde_json::to_string(&result)
-        .map_err(|e| JsValue::from_str(&format!("Error serializing prediction result: {}", e)))
+        .map_err(|e| format!("Error serializing prediction result: {}", e))
+}
+
+
+// --- INTERFAZ WASM (Wrappers) ---
+
+#[wasm_bindgen]
+pub fn init_vocalis() -> Result<(), JsValue> {
+    #[cfg(target_arch = "wasm32")]
+    console_error_panic_hook::set_once();
+    
+    init_vocalis_internal().map_err(|e| JsValue::from_str(&e))
+}
+
+#[wasm_bindgen]
+pub fn predict_vowel(audio_data: &[f32], sample_rate: f32) -> Result<String, JsValue> {
+    predict_vowel_internal(audio_data, sample_rate).map_err(|e| JsValue::from_str(&e))
 }

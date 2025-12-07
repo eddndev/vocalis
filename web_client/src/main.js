@@ -11,7 +11,7 @@ const canvas = document.getElementById('visualizer');
 const canvasCtx = canvas.getContext('2d');
 
 const EXPECTED_SAMPLE_RATE = 16000;
-const RECORDING_DURATION_MS = 500; // 0.5 seconds
+const RECORDING_DURATION_MS = 1500; // 1.5 seconds for better stability
 const EXPECTED_AUDIO_LENGTH = EXPECTED_SAMPLE_RATE * (RECORDING_DURATION_MS / 1000); // 8000 samples
 
 let mediaRecorder;
@@ -107,7 +107,7 @@ async function startRecording() {
                 console.log(`Audio decoded. Sample rate: ${decodedAudio.sampleRate}, Length: ${decodedAudio.length}`);
 
                 // Resample and convert to mono if necessary
-                const processedAudio = processAudio(decodedAudio, audioContext.sampleRate, EXPECTED_SAMPLE_RATE);
+                const processedAudio = await processAudio(decodedAudio, audioContext.sampleRate, EXPECTED_SAMPLE_RATE);
                 console.log(`Audio processed. New length: ${processedAudio.length}`);
 
                 if (processedAudio.length !== EXPECTED_AUDIO_LENGTH) {
@@ -162,59 +162,54 @@ async function startRecording() {
     }
 }
 
-function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
-    // 1. Downmix to Mono
-    let data = audioBuffer.getChannelData(0);
-    if (audioBuffer.numberOfChannels > 1) {
-        const monoData = new Float32Array(audioBuffer.length);
-        for (let i = 0; i < audioBuffer.length; i++) {
-            let sum = 0;
-            for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
-                sum += audioBuffer.getChannelData(ch)[i];
-            }
-            monoData[i] = sum / audioBuffer.numberOfChannels;
-        }
-        data = monoData;
-    }
+async function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
+    // 1. Resample usando OfflineAudioContext (Alta Calidad)
+    // Esto evita el aliasing y la pérdida de agudos de la interpolación lineal
+    let data;
 
-    // 2. Resample to Target Rate (16kHz)
     if (originalSampleRate !== targetSampleRate) {
-        const ratio = originalSampleRate / targetSampleRate;
-        const newLength = Math.round(data.length / ratio);
-        const resampledData = new Float32Array(newLength);
-        for (let i = 0; i < newLength; i++) {
-            const index = i * ratio;
-            const floor = Math.floor(index);
-            const ceil = Math.ceil(index);
-            const frac = index - floor;
-            if (ceil < data.length) {
-                resampledData[i] = data[floor] * (1 - frac) + data[ceil] * frac;
-            } else {
-                resampledData[i] = data[floor];
+        const offlineCtx = new OfflineAudioContext(
+            1, // mono
+            audioBuffer.duration * targetSampleRate,
+            targetSampleRate
+        );
+
+        const source = offlineCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(offlineCtx.destination);
+        source.start();
+
+        const resampledBuffer = await offlineCtx.startRendering();
+        data = resampledBuffer.getChannelData(0);
+    } else {
+        // Si ya es 16k, solo tomamos el canal 0 (o mezclamos)
+        data = audioBuffer.getChannelData(0);
+        // Si fuera estéreo, habría que mezclar, pero OfflineCtx ya lo haría si se usara siempre
+        if (audioBuffer.numberOfChannels > 1) {
+            const monoData = new Float32Array(audioBuffer.length);
+            for (let i = 0; i < audioBuffer.length; i++) {
+                monoData[i] = (audioBuffer.getChannelData(0)[i] + audioBuffer.getChannelData(1)[i]) / 2;
             }
+            data = monoData;
         }
-        data = resampledData;
     }
 
-    // 3. High-Pass Filter (DISABLED)
-    // Removed to preserve low-frequency information for vowels like 'u'.
-    // const alpha = 0.97;
-    // const filteredData = new Float32Array(data.length);
-    // filteredData[0] = data[0];
-    // for (let i = 1; i < data.length; i++) {
-    //     filteredData[i] = alpha * (filteredData[i - 1] + data[i] - data[i - 1]);
-    // }
-    // data = filteredData;
+    // 2. High-Pass Filter (Simple IIR ~80Hz @ 16kHz)
+    // Reactivado para eliminar DC offset y ruido grave que sesga hacia 'o'/'u'
+    const alpha = 0.97;
+    const filteredData = new Float32Array(data.length);
+    filteredData[0] = data[0];
+    for (let i = 1; i < data.length; i++) {
+        filteredData[i] = alpha * (filteredData[i - 1] + data[i] - data[i - 1]);
+    }
+    data = filteredData;
 
-    // 4. Smart Centering / Cropping
-    // Instead of naive center crop, find the loudest part of the audio
+    // 3. Smart Centering / Cropping
     if (data.length > EXPECTED_AUDIO_LENGTH) {
-        // Scan for the loudest 50ms window to find the "center" of the voice
         const scanWindow = Math.floor(targetSampleRate * 0.05); // 50ms
         let maxEnergy = 0;
         let bestCenterIndex = Math.floor(data.length / 2);
 
-        // Scan with a step for speed
         for (let i = 0; i < data.length - scanWindow; i += 100) {
             let currentEnergy = 0;
             for (let j = 0; j < scanWindow; j++) {
@@ -226,15 +221,10 @@ function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
             }
         }
 
-        // Calculate start index to center the expected length around the best center
         let startIndex = Math.floor(bestCenterIndex - (EXPECTED_AUDIO_LENGTH / 2));
-
-        // Clamp indices to keep within bounds
         startIndex = Math.max(0, Math.min(startIndex, data.length - EXPECTED_AUDIO_LENGTH));
-
         data = data.slice(startIndex, startIndex + EXPECTED_AUDIO_LENGTH);
     } else if (data.length < EXPECTED_AUDIO_LENGTH) {
-        // Pad symmetrically with zeros if too short
         const totalPadding = EXPECTED_AUDIO_LENGTH - data.length;
         const padLeft = Math.floor(totalPadding / 2);
         const padded = new Float32Array(EXPECTED_AUDIO_LENGTH).fill(0);
@@ -242,21 +232,22 @@ function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
         data = padded;
     }
 
-    // 5. Peak Normalization (DISABLED)
-    // Librosa/Python does not aggressively normalize to 0.95 by default.
-    // We want the natural dynamics to be preserved (MFCC C0 handles loudness).
-    /*
+    // 4. Peak Normalization (Ahora sí, suave)
+    // Para asegurar que la amplitud sea comparable al entrenamiento
     let maxVal = 0;
     for (let i = 0; i < data.length; i++) {
         if (Math.abs(data[i]) > maxVal) maxVal = Math.abs(data[i]);
     }
     if (maxVal > 0) {
-        const scale = 0.95 / maxVal;
-        for (let i = 0; i < data.length; i++) {
-            data[i] *= scale;
+        // Escalamos a 0.8 para dejar headroom (Python suele estar normalizado a +/- 1.0)
+        // Evitamos escalar ruido de fondo (solo si hay señal decente)
+        if (maxVal > 0.1) {
+            const scale = 0.8 / maxVal;
+            for (let i = 0; i < data.length; i++) {
+                data[i] *= scale;
+            }
         }
     }
-    */
 
     return data;
 }

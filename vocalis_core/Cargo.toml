@@ -26,3 +26,6 @@ serde-wasm-bindgen = "0.4"
 
 # Utilidades
 console_error_panic_hook = "0.1" # Mejores errores en la consola del navegador
+
+[dev-dependencies]
+hound = "3.5"
