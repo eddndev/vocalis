@@ -42,16 +42,17 @@ def get_features(y, sr=16000):
     # 3. Extraer MFCCs (La nueva propuesta)
     # n_mfcc=13 es el estándar para voz
     # n_fft=1024, hop_length=256 (16ms)
-    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_fft=1024, hop_length=256)
+    # IMPORTANTE: n_mels=40 y htk=True para coincidir EXACTAMENTE con Rust (dsp.rs)
+    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_mels=40, width=None, htk=True, n_fft=1024, hop_length=256)
     
-    # A. Normalización del Canal (CMN - Cepstral Mean Normalization)
-    # Restamos la media de cada coeficiente a lo largo del tiempo
-    # Esto elimina el ruido estacionario (efecto del micrófono)
-    mfccs_cmn = mfccs - np.mean(mfccs, axis=1, keepdims=True)
+    # A. Normalización del Canal (CMN) ESTRATEGIA ACTUALIZADA:
+    # Para vocales aisladas, CMN local anula la señal. 
+    # Usamos RAW MFCCs aquí y confiamos en el StandardScaler global durante el entrenamiento.
     
-    # B. Promedio temporal ("Bag-of-frames")
-    # Colapsamos la matriz de tiempo a un vector de 13 valores
-    mfccs_mean = np.mean(mfccs_cmn, axis=1)
+    # mfccs_cmn = mfccs - np.mean(mfccs, axis=1, keepdims=True) # <-- ELIMINADO
+    
+    # B. Promedio temporal ("Bag-of-frames") de RAW MFCCs
+    mfccs_mean = np.mean(mfccs, axis=1)
     
     # Guardar en el diccionario
     for i in range(13):

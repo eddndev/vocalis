@@ -8,8 +8,8 @@ from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.pipeline import Pipeline
 
-INPUT_CSV = "dsp_lab/dsp_features.csv"
-MODEL_DIR = "dsp_lab/models"
+INPUT_CSV = "research/dsp_lab/dsp_features.csv"
+MODEL_DIR = "research/dsp_lab/models"
 
 def train_gender_specific_model(df, gender_label):
     print(f"\n{'='*60}")
@@ -32,25 +32,21 @@ def train_gender_specific_model(df, gender_label):
     
     # Pipeline: Scaler + SVM
     # El escalado es CRÍTICO para SVM
+    # OPTIMIZACIÓN: Eliminamos GridSearchCV para acelerar
+    # Dado que ahora usamos Estandarización Global + MFCCs crudos,
+    # los valores estándar son muy robustos.
+    # C=10: Buen compromiso entre sesgo/varianza.
+    # gamma='scale': 1 / (n_features * X.var()) <- Se adapta solo a tus datos
+    
     pipeline = Pipeline([
         ('scaler', StandardScaler()),
-        ('svm', SVC(kernel='rbf', probability=True))
+        ('svm', SVC(C=10, gamma='scale', kernel='rbf', probability=True))
     ])
     
-    # Grid Search para optimizar C y Gamma
-    # C: Penalización de errores (Alto = menos tolerancia, posible overfitting)
-    # Gamma: Influencia de un solo punto (Alto = radio pequeño)
-    param_grid = {
-        'svm__C': [1, 10, 100],
-        'svm__gamma': ['scale', 0.1, 0.01]
-    }
+    print("Entrenando modelo (Configuración rápida: C=10, gamma=scale)...")
+    pipeline.fit(X_train, y_train)
     
-    print("Buscando hiperparámetros óptimos...")
-    grid = GridSearchCV(pipeline, param_grid, cv=3, n_jobs=-1, verbose=1)
-    grid.fit(X_train, y_train)
-    
-    print(f"Mejores parámetros: {grid.best_params_}")
-    best_model = grid.best_estimator_
+    best_model = pipeline
     
     # Evaluar
     preds = best_model.predict(X_test)

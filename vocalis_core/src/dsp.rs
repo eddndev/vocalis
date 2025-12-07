@@ -192,10 +192,11 @@ impl DspProcessor {
         let log_mel_energies = self.log_energies(&mel_energies);
 
         // 6. DCT (MFCCs)
-        let mut mfccs = self.dct(&log_mel_energies);
+        let mfccs = self.dct(&log_mel_energies);
 
-        // 7. Cepstral Mean Normalization
-        self.cepstral_mean_normalization(&mut mfccs);
+        // NOTE: CMN (Cepstral Mean Normalization) removed.
+        // We rely on Global Standardization (Scaler) in the inference stage.
+        // self.cepstral_mean_normalization(&mut mfccs);
 
         mfccs
     }

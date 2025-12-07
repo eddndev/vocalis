@@ -41,16 +41,16 @@ pub fn predict_vowel(audio_data: &[f32], sample_rate: f32) -> Result<String, JsV
     let pre_emphasis_coeff = 0.0; // Disabled to match librosa.feature.mfcc defaults
 
     // --- DEBUG: Synthetic 150Hz Sine Wave (matches Python debug script) ---
-    let mut audio_data_synth = Vec::with_capacity(8000);
-    let duration = 0.5;
-    let samples = (sample_rate * duration) as usize;
-    for i in 0..samples {
-        let t = i as f32 / sample_rate;
-        let sample = 0.5 * (2.0 * std::f32::consts::PI * 150.0 * t).sin();
-        audio_data_synth.push(sample);
-    }
-    let audio_data = &audio_data_synth; // Override input
-    web_sys::console::log_1(&format!("DEBUG: Using Synthetic 150Hz Sine Wave (Max: {:.2})", 0.5).into());
+    // let mut audio_data_synth = Vec::with_capacity(8000);
+    // let duration = 0.5;
+    // let samples = (sample_rate * duration) as usize;
+    // for i in 0..samples {
+    //     let t = i as f32 / sample_rate;
+    //     let sample = 0.5 * (2.0 * std::f32::consts::PI * 150.0 * t).sin();
+    //     audio_data_synth.push(sample);
+    // }
+    // let audio_data = &audio_data_synth; // Override input
+    // web_sys::console::log_1(&format!("DEBUG: Using Synthetic 150Hz Sine Wave (Max: {:.2})", 0.5).into());
     // ----------------------------------------------------------------------
 
     let mut all_mfccs: Vec<Vec<f32>> = Vec::new();

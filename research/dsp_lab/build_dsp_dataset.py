@@ -5,9 +5,9 @@ import numpy as np
 from tqdm import tqdm
 from feature_extractor import get_features
 
-DATASET_DIR = "train_lab/dataset/audio"
-METADATA_FILE = "train_lab/dataset/metadata.csv"
-OUTPUT_CSV = "dsp_lab/dsp_features.csv"
+DATASET_DIR = "research/train_lab/dataset/audio"
+METADATA_FILE = "research/train_lab/dataset/metadata.csv"
+OUTPUT_CSV = "research/dsp_lab/dsp_features.csv"
 
 def main():
     if not os.path.exists(METADATA_FILE):

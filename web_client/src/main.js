@@ -65,20 +65,27 @@ function drawVisualizer() {
     }
 }
 
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        console.log('Recording stopped manually');
+    }
+}
+
 async function startRecording() {
     statusElement.textContent = 'Status: Requesting microphone access...';
     try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         console.log('Microphone access granted');
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
+
         // Setup Visualizer
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
         const source = audioContext.createMediaStreamSource(stream);
         source.connect(analyser);
         drawVisualizer();
-        
+
         mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
 
@@ -89,10 +96,10 @@ async function startRecording() {
         mediaRecorder.onstop = async () => {
             console.log('Recorder stopped. Processing audio...');
             cancelAnimationFrame(visualizerFrameId); // Stop visualizer
-            
+
             statusElement.textContent = 'Status: Recording stopped. Processing audio...';
-            const audioBlob = new Blob(audioChunks, { 'type' : 'audio/webm; codecs=opus' });
-            
+            const audioBlob = new Blob(audioChunks, { 'type': 'audio/webm; codecs=opus' });
+
             try {
                 // Convert Blob to AudioBuffer
                 const arrayBuffer = await audioBlob.arrayBuffer();
@@ -102,7 +109,7 @@ async function startRecording() {
                 // Resample and convert to mono if necessary
                 const processedAudio = processAudio(decodedAudio, audioContext.sampleRate, EXPECTED_SAMPLE_RATE);
                 console.log(`Audio processed. New length: ${processedAudio.length}`);
-                
+
                 if (processedAudio.length !== EXPECTED_AUDIO_LENGTH) {
                     statusElement.textContent = `Status: Error: Processed audio length mismatch. Expected ${EXPECTED_AUDIO_LENGTH}, got ${processedAudio.length}.`;
                     console.error('Processed audio length mismatch:', processedAudio.length);
@@ -113,7 +120,7 @@ async function startRecording() {
                 const wavBlob = encodeWAV(processedAudio, EXPECTED_SAMPLE_RATE);
                 const audioUrl = URL.createObjectURL(wavBlob);
                 audioPlayback.src = audioUrl;
-                
+
                 downloadLink.href = audioUrl;
                 downloadLink.download = `debug_audio_${new Date().getTime()}.wav`;
                 downloadLink.style.display = 'block';
@@ -133,7 +140,7 @@ async function startRecording() {
             }
         };
 
-        mediaRecorder.start(); 
+        mediaRecorder.start();
         console.log('Recording started');
         statusElement.textContent = `Status: Recording for ${RECORDING_DURATION_MS / 1000} seconds...`;
         startRecordingButton.disabled = true;
@@ -181,23 +188,23 @@ function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
             const ceil = Math.ceil(index);
             const frac = index - floor;
             if (ceil < data.length) {
-                 resampledData[i] = data[floor] * (1 - frac) + data[ceil] * frac;
+                resampledData[i] = data[floor] * (1 - frac) + data[ceil] * frac;
             } else {
-                 resampledData[i] = data[floor];
+                resampledData[i] = data[floor];
             }
         }
         data = resampledData;
     }
 
-    // 3. High-Pass Filter (Simple IIR ~80Hz @ 16kHz)
-    // Removes DC offset and low rumble noise
-    const alpha = 0.97; 
-    const filteredData = new Float32Array(data.length);
-    filteredData[0] = data[0];
-    for (let i = 1; i < data.length; i++) {
-        filteredData[i] = alpha * (filteredData[i-1] + data[i] - data[i-1]);
-    }
-    data = filteredData;
+    // 3. High-Pass Filter (DISABLED)
+    // Removed to preserve low-frequency information for vowels like 'u'.
+    // const alpha = 0.97;
+    // const filteredData = new Float32Array(data.length);
+    // filteredData[0] = data[0];
+    // for (let i = 1; i < data.length; i++) {
+    //     filteredData[i] = alpha * (filteredData[i - 1] + data[i] - data[i - 1]);
+    // }
+    // data = filteredData;
 
     // 4. Smart Centering / Cropping
     // Instead of naive center crop, find the loudest part of the audio
@@ -221,10 +228,10 @@ function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
 
         // Calculate start index to center the expected length around the best center
         let startIndex = Math.floor(bestCenterIndex - (EXPECTED_AUDIO_LENGTH / 2));
-        
+
         // Clamp indices to keep within bounds
         startIndex = Math.max(0, Math.min(startIndex, data.length - EXPECTED_AUDIO_LENGTH));
-        
+
         data = data.slice(startIndex, startIndex + EXPECTED_AUDIO_LENGTH);
     } else if (data.length < EXPECTED_AUDIO_LENGTH) {
         // Pad symmetrically with zeros if too short
@@ -235,8 +242,10 @@ function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
         data = padded;
     }
 
-    // 5. Peak Normalization
-    // Scale audio so max amplitude is 0.95 (prevents clipping but ensures good volume)
+    // 5. Peak Normalization (DISABLED)
+    // Librosa/Python does not aggressively normalize to 0.95 by default.
+    // We want the natural dynamics to be preserved (MFCC C0 handles loudness).
+    /*
     let maxVal = 0;
     for (let i = 0; i < data.length; i++) {
         if (Math.abs(data[i]) > maxVal) maxVal = Math.abs(data[i]);
@@ -247,6 +256,7 @@ function processAudio(audioBuffer, originalSampleRate, targetSampleRate) {
             data[i] *= scale;
         }
     }
+    */
 
     return data;
 }
@@ -255,7 +265,7 @@ async function runInference(audioData) {
     statusElement.textContent = 'Status: Running WASM inference...';
     vowelElement.textContent = '';
     genderElement.textContent = '';
-    
+
     try {
         const rawResult = await predict_vowel(audioData, EXPECTED_SAMPLE_RATE);
         const prediction = JSON.parse(rawResult);

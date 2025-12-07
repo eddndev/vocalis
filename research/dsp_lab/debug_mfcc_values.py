@@ -23,14 +23,13 @@ def debug_mfcc():
     print("\n--- Raw MFCCs (First Frame) ---")
     print(mfccs[:, 0])
 
-    # 2. CMN (Cepstral Mean Normalization)
-    mfccs_cmn = mfccs - np.mean(mfccs, axis=1, keepdims=True)
+    # NOTE: CMN (Cepstral Mean Normalization)
+    # If we subtract the global mean (CMN) and then take the global mean again (Bag-of-Frames),
+    # the result is mathematically ZERO.
+    # For sustained vowels validation, we compare NON-NORMALIZED averaged MFCCs.
     
-    print("\n--- MFCCs after CMN (First Frame) ---")
-    print(mfccs_cmn[:, 0])
-
-    # 3. Bag-of-Frames (Mean)
-    mfccs_mean = np.mean(mfccs_cmn, axis=1)
+    # 2. Bag-of-Frames (Mean of RAW MFCCs)
+    mfccs_mean = np.mean(mfccs, axis=1)
     
     print("\n--- Final Averaged MFCCs (Target for Rust) ---")
     print(list(mfccs_mean))
