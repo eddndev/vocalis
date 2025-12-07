@@ -448,3 +448,24 @@ i: iM iM iM iM iM iM iM iF iM iM
 o: uM aM oM oM oM uM uM uM uM uM
 
 u: uM uM uM uM uM uM uM uM uM uM
+
+---
+
+## 5. Roadmap: Futura Interfaz de "Laboratorio Vocal"
+
+Para la versión final de la interfaz web, evolucionaremos de un simple clasificador a una herramienta de diagnóstico fonético detallado.
+
+### 5.1. Salida Probabilística (Inferencia Rica)
+En lugar de una predicción binaria ("Es una A"), el núcleo Rust exportará un vector de confianza basado en la votación interna del SVM:
+*   **Visualización:** Gráfico de barras o radar mostrando la "pureza" de la pronunciación.
+*   **Ejemplo:** `{"a": 85%, "e": 10%, "o": 5%}`.
+*   **Utilidad:** Permitirá al usuario ver si su pronunciación es ambigua o se inclina hacia otra vocal (útil para entrenamiento de acento).
+
+### 5.2. Dashboard de Señal
+Mostrar métricas físicas extraídas por el DSP en tiempo real:
+*   **Pitch (F0):** Frecuencia fundamental en Hz (ej. "120Hz - Rango Masculino").
+*   **Calidad:** Indicador de relación señal-ruido.
+*   **Espectrograma:** Visualización 2D de la energía de la voz.
+
+### 5.3. Mejoras de Robusteza (VAD)
+*   **Voice Activity Detection:** Recorte automático de silencios al inicio/final de la grabación en JavaScript para enviar a Rust solo la parte vocal útil, mejorando la precisión en vocales cortas.
