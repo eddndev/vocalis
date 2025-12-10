@@ -1,0 +1,32 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navbar from "../components/ui/Navbar.astro";
+import AudioAnalyzer from "../components/app/AudioAnalyzer.astro";
+---
+
+<Layout title="Vocalis | Laboratory">
+  <Navbar />
+
+  <section
+    class="relative pt-32 pb-24 px-6 min-h-screen flex flex-col items-center justify-center"
+  >
+    <!-- Header -->
+    <div class="text-center mb-16 space-y-6">
+      <h1
+        class="text-6xl md:text-8xl font-display font-black tracking-tighter text-black uppercase leading-[0.9]"
+      >
+        Laboratorio <span class="text-brand-primary">Vocal</span>
+      </h1>
+      <p
+        class="text-text-muted font-light text-xl md:text-2xl max-w-3xl mx-auto"
+      >
+        Analiza tu voz en tiempo real usando nuestro motor Rust/WASM.
+      </p>
+    </div>
+
+    <!-- The Tool -->
+    <div class="w-full max-w-[1800px]">
+      <AudioAnalyzer />
+    </div>
+  </section>
+</Layout>

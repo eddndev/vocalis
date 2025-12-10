@@ -1,0 +1,459 @@
+---
+// Frontend Component for Audio Analysis
+---
+
+<div id="vocalis-analyzer" class="w-full max-w-[1600px] mx-auto px-6">
+    <!-- Main Interface Card (No Shadow, No Border) -->
+    <div class="relative bg-white p-0 md:p-12">
+        <!-- Grid/Tech Decoration (Subtle Light Mode) -->
+        <div
+            class="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.02)_1px,transparent_1px)] bg-[size:20px_20px] pointer-events-none"
+        >
+        </div>
+
+        <div class="relative z-20 flex flex-col lg:flex-row gap-12 lg:gap-24">
+            <!-- LEFT COLUMN: Input & Visualizer -->
+            <div class="flex-1 space-y-8">
+                <!-- Header -->
+                <div class="space-y-2 border-l-4 border-brand-primary pl-6">
+                    <h2
+                        class="text-3xl font-display font-black tracking-tighter text-black uppercase"
+                    >
+                        Análisis de Entrada
+                    </h2>
+                    <p class="text-text-muted font-mono text-sm">
+                        Motor de descomposición espectral en tiempo real.
+                    </p>
+                </div>
+
+                <!-- Visualizer Container (No Border, No Grid Overlay) -->
+                <div
+                    class="relative bg-black/5 h-64 md:h-80 group overflow-hidden"
+                >
+                    <canvas
+                        id="visualizer"
+                        class="w-full h-full block opacity-70 group-hover:opacity-100 transition-opacity duration-500"
+                    ></canvas>
+
+                    <!-- Overlay Status -->
+                    <div
+                        id="status-badge"
+                        class="absolute top-0 left-0 bg-black text-white px-4 py-2 font-mono text-xs tracking-widest uppercase font-bold"
+                    >
+                        OFFLINE
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="flex items-center gap-6">
+                    <button
+                        id="btn-record"
+                        class="flex-1 group relative overflow-hidden rounded-full bg-black text-white px-12 py-5 font-bold tracking-tight text-lg hover:scale-[1.02] transition-transform duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <div
+                            class="absolute inset-0 bg-brand-primary opacity-0 group-hover:opacity-10 transition-opacity duration-300"
+                        >
+                        </div>
+                        <div
+                            class="relative flex items-center justify-center gap-3"
+                        >
+                            <span
+                                class="w-3 h-3 rounded-full bg-red-500 animate-pulse hidden"
+                                id="rec-dot"></span>
+                            <span id="btn-text">INICIAR MOTOR</span>
+                        </div>
+                    </button>
+                </div>
+
+                <p
+                    class="text-xs text-center text-text-muted font-mono uppercase tracking-wider"
+                    id="status-text"
+                >
+                    Listo para inicializar motor...
+                </p>
+            </div>
+
+            <!-- RIGHT COLUMN: Results & DSP Data -->
+            <div
+                class="w-full lg:w-1/3 flex flex-col justify-between border-l-0 lg:border-l border-black/5 pl-0 lg:pl-12 pt-12 lg:pt-0"
+            >
+                <!-- Main Prediction -->
+                <div class="mb-12">
+                    <h3
+                        class="text-xs font-mono tracking-widest text-text-muted mb-4 uppercase"
+                    >
+                        Clase Primaria
+                    </h3>
+                    <div class="flex items-baseline gap-4">
+                        <div
+                            class="text-[8rem] leading-none font-display font-black text-black tracking-tighter"
+                            id="res-vowel"
+                        >
+                            --
+                        </div>
+                        <div
+                            class="text-xl font-mono text-brand-primary border-2 border-brand-primary px-3 py-1 rounded-full"
+                            id="res-gender"
+                        >
+                            --
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Probabilities -->
+                <div class="space-y-6 flex-1">
+                    <h3
+                        class="text-xs font-mono tracking-widest text-text-muted uppercase border-b border-black/10 pb-2"
+                    >
+                        Matriz de Confianza
+                    </h3>
+                    <div id="prob-list" class="space-y-3">
+                        <!-- Bars injected by JS -->
+                        <div
+                            class="text-sm font-mono text-text-muted italic py-8"
+                        >
+                            Esperando flujo de audio...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Tech Info -->
+                <div
+                    class="mt-12 pt-6 border-t border-black/10 text-xs font-mono text-text-muted space-y-1 opacity-50"
+                >
+                    <div>MODE: WASM/SIMD</div>
+                    <div>DSP: FFT-2048 / MFCC-40</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    import init, {
+        init_vocalis,
+        predict_vowel,
+    } from "../../lib/wasm/vocalis_core.js";
+
+    // --- CONFIG ---
+    const EXPECTED_SAMPLE_RATE = 16000;
+    const RECORDING_DURATION_MS = 1000; // 1 segundo es suficiente y más rápido
+    const EXPECTED_AUDIO_LENGTH =
+        EXPECTED_SAMPLE_RATE * (RECORDING_DURATION_MS / 1000);
+
+    // --- STATE ---
+    let audioContext;
+    let analyser;
+    let mediaRecorder;
+    let audioChunks = [];
+    let isRecording = false;
+    let visualizerFrameId;
+
+    // --- DOM ---
+    const canvas = document.getElementById("visualizer");
+    const canvasCtx = canvas.getContext("2d");
+    const btnRecord = document.getElementById("btn-record");
+    const btnText = document.getElementById("btn-text");
+    const recDot = document.getElementById("rec-dot");
+    const statusBadge = document.getElementById("status-badge");
+    const statusText = document.getElementById("status-text");
+    const resVowel = document.getElementById("res-vowel");
+    const resGender = document.getElementById("res-gender");
+    const probList = document.getElementById("prob-list");
+
+    // --- INIT ---
+    async function initialize() {
+        try {
+            statusText.textContent = "Cargando Módulo WASM...";
+            await init();
+            init_vocalis();
+
+            statusText.textContent = "Motor Listo.";
+            statusBadge.textContent = "INACTIVO";
+            statusBadge.className =
+                "absolute top-0 left-0 bg-brand-secondary text-white px-4 py-2 font-mono text-xs tracking-widest uppercase font-bold";
+
+            btnRecord.disabled = false;
+
+            // Resize canvas
+            resizeCanvas();
+            window.addEventListener("resize", resizeCanvas);
+        } catch (e) {
+            console.error(e);
+            statusText.textContent = "Error cargando Motor.";
+            statusBadge.textContent = "ERROR";
+            statusBadge.className =
+                "absolute top-0 left-0 bg-red-600 text-white px-4 py-2 font-mono text-xs tracking-widest uppercase font-bold";
+        }
+    }
+
+    function resizeCanvas() {
+        const parent = canvas.parentElement;
+        canvas.width = parent.clientWidth;
+        canvas.height = parent.clientHeight;
+    }
+
+    // --- VISUALIZER ---
+    function drawVisualizer() {
+        if (!analyser) return;
+
+        visualizerFrameId = requestAnimationFrame(drawVisualizer);
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        analyser.getByteFrequencyData(dataArray);
+
+        // Light Mode: Clear to transparent (white/gray bg behind)
+        canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const barWidth = (canvas.width / bufferLength) * 2.5;
+        let barHeight;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+            barHeight = dataArray[i];
+
+            // Konpo Light Style: Dark bars with cyan/purple accents
+            const alpha = barHeight / 255;
+
+            // Base: Very dark gray/black
+            canvasCtx.fillStyle = `rgba(24, 24, 27, ${alpha})`;
+
+            // High energy: Brand Primary (Purple)
+            if (barHeight > 160) {
+                canvasCtx.fillStyle = `rgba(139, 92, 246, ${alpha})`;
+            }
+
+            canvasCtx.fillRect(
+                x,
+                canvas.height - barHeight * (canvas.height / 255),
+                barWidth,
+                barHeight * (canvas.height / 255),
+            );
+
+            x += barWidth + 1;
+        }
+    }
+
+    // --- AUDIO HANDLING ---
+    async function startRecording() {
+        if (isRecording) return;
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: true,
+            });
+            audioContext = new (window.AudioContext ||
+                window.webkitAudioContext)();
+
+            // Visualizer Setup
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 2048;
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+            drawVisualizer();
+
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+
+            mediaRecorder.onstop = async () => {
+                cancelAnimationFrame(visualizerFrameId);
+                // Clear canvas
+                canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+                statusText.textContent = "Procesando Señal...";
+                statusBadge.textContent = "PROCESANDO";
+                statusBadge.className =
+                    "absolute top-0 left-0 bg-brand-primary text-white px-4 py-2 font-mono text-xs tracking-widest uppercase font-bold animate-pulse";
+
+                const audioBlob = new Blob(audioChunks, {
+                    type: "audio/webm; codecs=opus",
+                });
+                await processAndPredict(audioBlob);
+
+                // Cleanup
+                stream.getTracks().forEach((t) => t.stop());
+                resetUIState();
+            };
+
+            mediaRecorder.start();
+            setRecordingState(true);
+
+            // Auto stop
+            setTimeout(() => {
+                if (mediaRecorder && mediaRecorder.state === "recording") {
+                    mediaRecorder.stop();
+                }
+            }, RECORDING_DURATION_MS);
+        } catch (e) {
+            console.error(e);
+            statusText.textContent = "Permiso de Mic denegado o Error.";
+        }
+    }
+
+    function setRecordingState(active) {
+        isRecording = active;
+        if (active) {
+            btnText.textContent = "ESCUCHANDO...";
+            recDot.classList.remove("hidden");
+            statusBadge.textContent = "VIVO";
+            statusBadge.className =
+                "absolute top-0 left-0 bg-red-600 text-white px-4 py-2 font-mono text-xs tracking-widest uppercase font-bold";
+        }
+    }
+
+    function resetUIState() {
+        isRecording = false;
+        btnText.textContent = "INICIAR MOTOR";
+        recDot.classList.add("hidden");
+
+        statusBadge.textContent = "INACTIVO";
+        statusBadge.className =
+            "absolute top-0 left-0 bg-brand-secondary text-white px-4 py-2 font-mono text-xs tracking-widest uppercase font-bold";
+    }
+
+    async function processAndPredict(blob) {
+        // ... (Same DSP Logic) ...
+        const arrayBuffer = await blob.arrayBuffer();
+        const decoded = await audioContext.decodeAudioData(arrayBuffer);
+        const data = await processAudioData(decoded, EXPECTED_SAMPLE_RATE);
+
+        try {
+            const resultJson = await predict_vowel(data, EXPECTED_SAMPLE_RATE);
+            const result = JSON.parse(resultJson);
+            renderResults(result);
+            statusText.textContent = "Análisis Completo.";
+        } catch (e) {
+            console.error(e);
+            statusText.textContent = "Inferencia Fallida.";
+        }
+    }
+
+    // --- DSP HELPER (Ported) ---
+    async function processAudioData(audioBuffer, targetRate) {
+        // Reuse logic from web_client/src/main.js
+        let data;
+        const originalRate = audioBuffer.sampleRate;
+        if (originalRate !== targetRate) {
+            const offlineCtx = new OfflineAudioContext(
+                1,
+                audioBuffer.duration * targetRate,
+                targetRate,
+            );
+            const source = offlineCtx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(offlineCtx.destination);
+            source.start();
+            const resampled = await offlineCtx.startRendering();
+            data = resampled.getChannelData(0);
+        } else {
+            data = audioBuffer.getChannelData(0);
+        }
+
+        const alpha = 0.97;
+        const filtered = new Float32Array(data.length);
+        filtered[0] = data[0];
+        for (let i = 1; i < data.length; i++) {
+            filtered[i] = alpha * (filtered[i - 1] + data[i] - data[i - 1]);
+        }
+        data = filtered;
+
+        if (data.length > EXPECTED_AUDIO_LENGTH) {
+            const scanWindow = Math.floor(targetRate * 0.05);
+            let maxEnergy = 0;
+            let bestCenter = Math.floor(data.length / 2);
+            for (let i = 0; i < data.length - scanWindow; i += 100) {
+                let e = 0;
+                for (let j = 0; j < scanWindow; j++) e += Math.abs(data[i + j]);
+                if (e > maxEnergy) {
+                    maxEnergy = e;
+                    bestCenter = i + scanWindow / 2;
+                }
+            }
+            let start = Math.floor(bestCenter - EXPECTED_AUDIO_LENGTH / 2);
+            start = Math.max(
+                0,
+                Math.min(start, data.length - EXPECTED_AUDIO_LENGTH),
+            );
+            data = data.slice(start, start + EXPECTED_AUDIO_LENGTH);
+        } else if (data.length < EXPECTED_AUDIO_LENGTH) {
+            const padded = new Float32Array(EXPECTED_AUDIO_LENGTH);
+            padded.set(
+                data,
+                Math.floor((EXPECTED_AUDIO_LENGTH - data.length) / 2),
+            );
+            data = padded;
+        }
+
+        let maxVal = 0;
+        for (let i = 0; i < data.length; i++)
+            if (Math.abs(data[i]) > maxVal) maxVal = Math.abs(data[i]);
+        if (maxVal > 0.01) {
+            const scale = 0.8 / maxVal;
+            for (let i = 0; i < data.length; i++) data[i] *= scale;
+        }
+
+        return data;
+    }
+
+    function renderResults(prediction) {
+        // Animate Vowel
+        resVowel.classList.remove("text-black");
+        resVowel.classList.add("scale-110", "text-brand-primary");
+        setTimeout(() => {
+            resVowel.classList.remove("scale-110", "text-brand-primary");
+            resVowel.classList.add("text-black");
+        }, 300);
+
+        resVowel.textContent = prediction.vowel;
+        resGender.textContent = prediction.gender;
+
+        probList.innerHTML = "";
+
+        if (prediction.probabilities) {
+            prediction.probabilities.forEach(([label, score]) => {
+                const percent = (score * 100).toFixed(0);
+
+                // Light Mode Bars
+                const row = document.createElement("div");
+                row.className = "flex items-center gap-4 group";
+
+                const widthStyle = `width: ${percent}%;`;
+                const isWinner = score > 0.8;
+                const barColorClass = isWinner
+                    ? "bg-brand-primary"
+                    : score > 0.4
+                      ? "bg-brand-secondary"
+                      : "bg-gray-300";
+                const textColorClass = isWinner
+                    ? "text-black font-bold"
+                    : "text-gray-400 font-normal";
+
+                row.innerHTML = `
+                    <span class="w-8 font-display text-lg ${textColorClass}">${label}</span>
+                    
+                    <div class="flex-1 h-8 bg-gray-100 relative overflow-hidden">
+                        <!-- Fill -->
+                        <div class="h-full transition-all duration-500 ease-out ${barColorClass}" 
+                             style="${widthStyle}">
+                        </div>
+                    </div>
+                    
+                    <span class="w-12 text-right text-sm font-mono text-text-muted">${percent}%</span>
+                `;
+                probList.appendChild(row);
+            });
+        }
+    }
+
+    // Bind Event
+    btnRecord.addEventListener("click", startRecording);
+
+    window.addEventListener("resize", () => {
+        resizeCanvas();
+    });
+
+    initialize();
+</script>

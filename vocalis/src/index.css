@@ -3,17 +3,22 @@
 @theme {
   --color-brand-primary: #8b5cf6;
   --color-brand-secondary: #06b6d4;
+  --color-brand-accent: #facc15;
   --color-bg-dark: #ffffff;
+  /* Revert to White */
   --color-bg-card: #f4f4f5;
+  /* Light Gray Card */
   --color-text-main: #18181b;
+  /* Black Text */
   --color-text-muted: #52525b;
+  /* Gray Text */
 
   --font-sans: 'Instrument Sans', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {

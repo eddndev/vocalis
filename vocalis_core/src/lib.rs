@@ -109,9 +109,11 @@ pub fn predict_vowel_internal(audio_data: &[f32], sample_rate: f32) -> Result<St
         .map(|(label, _)| label.clone())
         .unwrap_or_else(|| "Unknown".to_string());
     
+    let gender_str = if is_male { "Masculino" } else { "Femenino" };
+
     let result = PredictionResult {
         vowel: vowel,
-        gender: format!("{} (DSP)", gender_char),
+        gender: gender_str.to_string(), // Removed "(DSP)" and used full word
         probabilities: probabilities,
     };
 
