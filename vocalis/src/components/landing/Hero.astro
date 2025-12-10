@@ -1,0 +1,190 @@
+---
+
+---
+
+<section
+    id="hero"
+    class="relative min-h-[100dvh] w-full flex flex-col justify-end pb-24 px-6 sm:px-12 overflow-hidden"
+>
+    <!-- Canvas Background -->
+    <canvas
+        id="smoke-canvas"
+        class="absolute inset-0 z-0 w-full h-full block bg-[#050505]"></canvas>
+
+    <!-- Vignette for readability -->
+    <div
+        class="absolute inset-0 z-10 bg-gradient-to-t from-[#ffffff] via-[#ffffff]/40 to-transparent pointer-events-none"
+    >
+    </div>
+
+    <!-- Content -->
+    <div
+        class="relative z-20 w-full max-w-[1800px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-end"
+    >
+        <!-- Text Column -->
+        <div class="col-span-12 lg:col-span-8 flex flex-col gap-6">
+            <!-- Badge -->
+            <div class="hero-reveal overflow-hidden">
+                <span
+                    class="inline-block text-brand-primary text-sm font-mono tracking-widest uppercase mb-2"
+                >
+                    Real-time DSP Vowel Analysis
+                </span>
+            </div>
+
+            <!-- Main Headline -->
+            <h1 class="font-black tracking-tighter leading-[0.85] text-black">
+                <div class="hero-reveal overflow-hidden">
+                    <span class="block text-[clamp(3.5rem,11vw,10rem)]"
+                        >Vocalis</span
+                    >
+                </div>
+            </h1>
+
+            <!-- Subheadline -->
+            <div class="hero-reveal overflow-hidden max-w-2xl mt-4">
+                <p
+                    class="text-lg lg:text-xl text-text-muted font-light leading-relaxed"
+                >
+                    Un motor de análisis espectral impulsado por DSP y Rust.
+                    Clasificación precisa de vocales en tiempo real,
+                    directamente en tu navegador. Sin cajas negras, solo física.
+                </p>
+            </div>
+
+            <!-- CTA -->
+            <div class="hero-reveal overflow-hidden mt-8">
+                <a
+                    href="#tool"
+                    class="group relative inline-flex items-center gap-3 px-8 py-4 bg-black text-white font-bold tracking-tight text-lg rounded-full overflow-hidden hover:scale-105 transition-transform duration-300"
+                >
+                    <span class="relative z-10">Probar Motor</span>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="relative z-10 transition-transform group-hover:translate-x-1"
+                        ><line x1="5" y1="12" x2="19" y2="12"></line><polyline
+                            points="12 5 19 12 12 19"></polyline></svg
+                    >
+
+                    <!-- Hover Effect Background -->
+                    <div
+                        class="absolute inset-0 bg-brand-primary opacity-0 group-hover:opacity-10 transition-opacity duration-300"
+                    >
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+    import { gsap } from "gsap";
+
+    // --- Smoke/Light Waves Canvas Animation ---
+    const initCanvas = () => {
+        const canvas = document.getElementById(
+            "smoke-canvas",
+        ) as HTMLCanvasElement;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        let width = 0;
+        let height = 0;
+        let time = 0;
+
+        // Configuration
+        const waveCount = 6;
+        const colors = [
+            "#8b5cf6", // Purple
+            "#06b6d4", // Cyan
+            "#4c1d95", // Deep Purple
+        ];
+
+        const resize = () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        };
+
+        window.addEventListener("resize", resize);
+        resize();
+
+        const animate = () => {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, width, height);
+
+            // 'multiply' for "ink" or "dark smoke" effect on white
+            ctx.globalCompositeOperation = "multiply";
+            // Reduced blur for definition
+            ctx.filter = "blur(20px)";
+            ctx.lineWidth = 150;
+
+            time += 0.005;
+
+            for (let i = 0; i < waveCount; i++) {
+                ctx.beginPath();
+
+                const color = colors[i % colors.length];
+                ctx.strokeStyle = color;
+
+                // Organic movement parameters
+                // Different speeds and frequencies for interference
+                const speed = i * 0.5 + 1;
+                const amplitude = height * 0.25;
+                const centerY = height / 2 + Math.sin(time * speed * 0.5) * 100;
+
+                for (let x = 0; x < width; x += 30) {
+                    // Overlapping sine waves
+                    const y =
+                        centerY +
+                        Math.sin(x * 0.002 + time * speed + i) * amplitude +
+                        Math.sin(x * 0.01 + time) * (amplitude * 0.2); // Add detail
+
+                    if (x === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+
+                ctx.stroke();
+            }
+
+            // Reset context for next frame
+            ctx.globalCompositeOperation = "source-over";
+            ctx.filter = "none";
+
+            requestAnimationFrame(animate);
+        };
+
+        animate();
+    };
+
+    // --- GSAP Animations ---
+    const initAnimations = () => {
+        const reveals = document.querySelectorAll(".hero-reveal > *"); // Target immediate children
+
+        if (reveals.length === 0) return;
+
+        gsap.from(reveals, {
+            y: 100,
+            opacity: 0,
+            duration: 1.5,
+            stagger: 0.1,
+            ease: "power3.out",
+            delay: 0.2, // Wait a bit for layout
+        });
+    };
+
+    // Run on mount
+    document.addEventListener("DOMContentLoaded", () => {
+        initCanvas();
+        initAnimations();
+    });
+</script>

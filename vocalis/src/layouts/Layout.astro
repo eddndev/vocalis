@@ -1,0 +1,70 @@
+---
+import "../index.css";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+
+    <!-- Fonts: Instrument Sans + JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Lenis & GSAP Setup -->
+    <script>
+      import Lenis from "lenis";
+      import { gsap } from "gsap";
+      import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+      gsap.registerPlugin(ScrollTrigger);
+
+      // Initialize Lenis for smooth scrolling
+      const lenis = new Lenis({
+        lerp: 0.1,
+        smoothWheel: true,
+      });
+
+      // Synchronize Lenis with GSAP ScrollTrigger
+      lenis.on("scroll", ScrollTrigger.update);
+
+      gsap.ticker.add((time) => {
+        lenis.raf(time * 1000);
+      });
+
+      gsap.ticker.lagSmoothing(0);
+
+      // Make accessible globally if needed (optional)
+      (window as any).lenis = lenis;
+    </script>
+  </head>
+  <body
+    class="bg-bg-dark text-text-main antialiased selection:bg-purple-500/30 selection:text-purple-700"
+  >
+    <!-- Grid Pattern Background -->
+    <div
+      class="fixed inset-0 z-0 pointer-events-none bg-grid-pattern opacity-[0.4]"
+      aria-hidden="true"
+    >
+    </div>
+
+    <!-- Main Content -->
+    <main class="relative z-10 flex flex-col min-h-screen">
+      <slot />
+    </main>
+  </body>
+</html>
