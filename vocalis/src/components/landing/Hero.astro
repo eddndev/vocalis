@@ -33,16 +33,16 @@
 
             <!-- Main Headline -->
             <h1
-                class="font-black tracking-tighter leading-[0.85] text-black select-none cursor-default"
+                class="font-black tracking-tighter leading-[0.85] text-black select-none cursor-default py-4"
             >
-                <div class="hero-reveal overflow-hidden">
+                <div class="hero-reveal">
                     <span
                         id="vocalis-title"
                         class="flex text-[clamp(3.5rem,11vw,10rem)]"
                     >
                         <!-- Split Text for Wave Effect -->
                         {
-                            "Vocalis"
+                            "VOCALIS"
                                 .split("")
                                 .map((char) => (
                                     <span class="char inline-block will-change-transform hover:text-brand-primary transition-colors duration-300">
@@ -217,17 +217,30 @@
 
             // Calculate wave
             requestAnimationFrame(() => {
+                const freq = 0.6; // Frequency of the wave
+
                 chars.forEach((char, i) => {
-                    // Sinusoidal offset calculation
-                    // We offset the phase based on mouse position to make it "travel"
-                    const phase = i * 0.5 + mouseX * Math.PI * 2;
-                    const yOffset = Math.sin(phase) * 15; // 15px amplitude
+                    // Logic: We want the PEAK (sin = 1) to be at the mouse position.
+                    // sin(x) peaks at PI/2.
+                    // We want: i * freq + phase = PI/2  WHEN  i == mouseIndex
+                    // Therefore: phase = PI/2 - (mouseIndex * freq)
+
+                    const mouseIndex = mouseX * (chars.length - 1); // Map 0-1 to index range
+                    const phase = Math.PI / 2 - mouseIndex * freq;
+
+                    const angle = i * freq + phase;
+
+                    // Responsive Amplitude: 10px on mobile, 20px on desktop
+                    const isMobile = window.innerWidth < 768;
+                    const amplitude = isMobile ? 10 : 20;
+
+                    const yOffset = Math.sin(angle) * amplitude;
 
                     gsap.to(char, {
                         y: yOffset,
-                        duration: 0.3,
+                        duration: 0.4,
                         ease: "power2.out",
-                        color: "#8150ec", // Highlight color (Bluish Purple)
+                        color: "#5b21b6", // Darker Violet (violet-800) close to black
                     });
                 });
             });

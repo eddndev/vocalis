@@ -1,6 +1,7 @@
 ---
 import "../index.css";
 import SpotlightGrid from "../components/ui/SpotlightGrid.astro";
+import Footer from "../components/ui/Footer.astro"; // Import Footer
 
 interface Props {
   title: string;
@@ -22,7 +23,7 @@ const { title } = Astro.props;
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..900;1,400..900&family=JetBrains+Mono:wght@400;700&display=swap"
       rel="stylesheet"
     />
 
@@ -63,5 +64,7 @@ const { title } = Astro.props;
     <main class="relative z-10 flex flex-col min-h-screen">
       <slot />
     </main>
+
+    <Footer />
   </body>
 </html>

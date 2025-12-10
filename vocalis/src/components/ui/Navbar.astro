@@ -6,9 +6,7 @@ const links = [
 ];
 ---
 
-<nav
-    class="fixed top-0 w-full z-50 px-6 py-6 sm:px-12 mix-blend-difference text-white"
->
+<nav class="fixed top-0 w-full z-50 px-6 py-6 sm:px-12 text-black">
     <div class="max-w-[1800px] mx-auto flex justify-between items-center">
         <!-- Logo / Brand -->
         <a
@@ -28,7 +26,7 @@ const links = [
                             class:list={[
                                 "text-sm tracking-widest uppercase hover:text-brand-primary transition-colors duration-300",
                                 {
-                                    "text-white": !link.active,
+                                    "text-black": !link.active,
                                     "text-brand-primary": link.active,
                                 },
                             ]}
