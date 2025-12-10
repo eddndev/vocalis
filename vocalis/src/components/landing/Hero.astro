@@ -4,7 +4,7 @@
 
 <section
     id="hero"
-    class="relative min-h-[100dvh] w-full flex flex-col justify-end pb-24 px-6 sm:px-12 overflow-hidden"
+    class="relative min-h-[100dvh] w-full flex flex-col justify-end pt-32 pb-24 px-6 sm:px-12 overflow-hidden"
 >
     <!-- Canvas Background -->
     <canvas id="smoke-canvas" class="absolute inset-0 z-0 w-full h-full block"
@@ -14,6 +14,25 @@
     <div
         class="absolute inset-0 z-10 bg-gradient-to-t from-white via-transparent to-transparent pointer-events-none"
     >
+    </div>
+
+    <div
+        class="absolute inset-0 z-20 w-full max-w-[1800px] mx-auto pointer-events-none"
+    >
+        <!-- Simulated DSP Log (Absolute Center Right) -->
+        <div
+            class="hidden lg:flex flex-col absolute right-0 top-1/2 -translate-y-1/2 items-start text-left opacity-40 mix-blend-multiply select-none pl-12"
+        >
+            <div
+                id="dsp-log"
+                class="font-mono text-lg sm:text-xl leading-tight space-y-1 text-black"
+            >
+                <!-- Log simulated via JS -->
+                <div class="opacity-50">INIT_CORE_WASM... OK</div>
+                <div class="opacity-50">ALLOC_BUFFER_1024... OK</div>
+                <div>_WAITING_FOR_STREAM_</div>
+            </div>
+        </div>
     </div>
 
     <!-- Content -->
@@ -276,10 +295,48 @@
         });
     };
 
+    // --- Simulated DSP Log ---
+    const initDSPLog = () => {
+        const logContainer = document.getElementById("dsp-log");
+        if (!logContainer) return;
+
+        const states = [
+            { label: "SILENCE", f1: 0, f2: 0, conf: 0.1 },
+            { label: "/a/ [OPEN_FRONT]", f1: 750, f2: 1300, conf: 0.98 },
+            { label: "/i/ [CLOSE_FRONT]", f1: 280, f2: 2250, conf: 0.95 },
+            { label: "/u/ [CLOSE_BACK]", f1: 300, f2: 850, conf: 0.92 },
+            { label: "NOISE", f1: 150, f2: 400, conf: 0.4 },
+        ];
+
+        let bufferId = 1000;
+
+        setInterval(() => {
+            bufferId += 64;
+            // Randomly pick a state
+            const state = states[Math.floor(Math.random() * states.length)];
+
+            // Add some jitter to values
+            const f1 = state.f1 + Math.floor(Math.random() * 20 - 10);
+            const f2 = state.f2 + Math.floor(Math.random() * 50 - 25);
+            const conf = (state.conf + Math.random() * 0.05).toFixed(4);
+
+            // Abrupt text update
+            logContainer.innerHTML = `
+                <div class="opacity-30">BUF_ID: ${bufferId} | SR: 44100</div>
+                <div class="opacity-50">FFT_SIZE: 2048 | WIN: HANN</div>
+                <div class="opacity-70">MFCC_VEC: [${(Math.random() * 10).toFixed(2)}, ${(Math.random() * 10).toFixed(2)}, ...]</div>
+                <div class="opacity-80 mt-2">INFERENCE_RESULT:</div>
+                <div class="text-brand-primary font-bold text-lg leading-none tracking-tight">>> ${state.label}</div>
+                <div class="text-xs font-bold text-black/60">CONF: ${conf} | F1: ${f1}Hz F2: ${f2}Hz</div>
+            `;
+        }, 120); // Fast update (120ms)
+    };
+
     // Run on mount
     document.addEventListener("DOMContentLoaded", () => {
         initCanvas();
         initAnimations();
         initTitleWave();
+        initDSPLog();
     });
 </script>
