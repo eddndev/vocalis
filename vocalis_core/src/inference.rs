@@ -168,8 +168,9 @@ impl Predictor {
                     
                     // f = decision value. 
                     // Platt: P(y=i | f) = 1 / (1 + exp(A*f + B))
+                    // Our sigmoid is 1 / (1 + exp(-x)). So we need x = -(Af + B).
                     let f = sum;
-                    let prob_i = Self::sigmoid(a * f + b); 
+                    let prob_i = Self::sigmoid(-(a * f + b)); 
                     let prob_j = 1.0 - prob_i; // P(y=j | f)
                     
                     r_matrix[i][j] = prob_i;
