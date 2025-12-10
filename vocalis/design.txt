@@ -1,0 +1,65 @@
+# Destilado de Diseño - Edd n' Dev (Konpo Style)
+
+## Referencia Base
+Archivo analizado: `resources/views/welcome.blade.php`
+
+## 1. Estética y Tokenización (Konpo Style)
+El diseño sigue una estética minimalista, oscura y de alto contraste ("Konpo"), caracterizada por el uso de grillas visibles o implícitas, tipografía masiva y acentos neón.
+
+### Paleta de Colores
+*   **Fondo Principal**: `#050505` (Casi negro, para reducir fatiga visual y aumentar contraste).
+*   **Texto Principal**: `#ffffff` (Blanco puro).
+*   **Texto Secundario**: `text-gray-300` (Gris suave para descripciones y metadatos).
+*   **Acentos (Purple/Neon)**:
+    *   Gradientes: `from-purple-400 to-purple-200` (Tailwind) / `#be88ff` a `#b5d8fd` (CSS custom).
+    *   Interacciones: `hover:text-purple-300`, `group-hover:text-purple-700`.
+*   **Cursor**: Blanco con `mix-blend-difference` (invierte el color sobre el que pasa).
+
+### Tipografía
+*   **Fuente Principal**: `Instrument Sans` (Google Fonts). Definida en CSS global.
+    *   Uso: Títulos, cuerpo, UI general.
+*   **Fuente Secundaria / Mono**: `font-mono` (Probablemente default o Fira Code/JetBrains).
+    *   Uso: Metadatos, etiquetas técnicas (`est. 2020`), pequeños detalles.
+*   **Escala Tipográfica**:
+    *   **Hero Title**: Masivo y responsivo.
+        *   Clases: `font-black tracking-tighter leading-[0.85]`
+        *   Tamaño: `clamp(3.5rem, 11vw, 12rem)` (Escala fluidamente desde móvil hasta pantallas gigantes).
+    *   **Cuerpo**: `text-lg lg:text-xl font-light` (Leible, espaciado).
+    *   **Etiquetas**: `text-sm tracking-widest uppercase` (Estilo técnico).
+
+## 2. Distribución y Layout
+El sitio utiliza una combinación de **Flexbox** para estructura vertical y **CSS Grid** para la diagramación de contenido.
+
+*   **Contenedor Maestro**: `max-w-[1800px] w-full mx-auto px-6 sm:px-12`. Diseño "wide" pero controlado.
+*   **Hero Section**:
+    *   Altura: `min-h-screen` (Ocupa todo el alto visible).
+    *   Alineación: `flex flex-col justify-end` (El contenido descansa en la parte inferior, dejando espacio al arte visual superior).
+*   **Grid System**:
+    *   Usa una grilla de 12 columnas (`grid-cols-1 lg:grid-cols-12`).
+    *   División típica: `col-span-12` (móvil) -> `col-span-5` (texto intro) + `col-span-7` (acciones/visuales) en desktop.
+    *   Espaciado: `gap-8`.
+
+## 3. Librerías de Animación y Efectos
+El sitio no utiliza animaciones estándar de UI, sino un stack avanzado de "Creative Development".
+
+### Stack Tecnológico
+1.  **GSAP (GreenSock Animation Platform)**:
+    *   Core + `ScrollTrigger` plugin.
+    *   Controla las secuencias complejas, timelines y animaciones basadas en scroll.
+2.  **Lenis**:
+    *   Librería para **Smooth Scrolling** (desplazamiento suave inercial). Fundamental para la sensación "premium".
+3.  **Ledding**:
+    *   Librería propia/privada (`@ledding`) o custom module.
+    *   Maneja efectos de fondo (`#ledding-animation-container`) y paneles (`ledding-panels`).
+4.  **Alpine.js**:
+    *   Manejo de estado ligero para interacciones UI simples.
+5.  **Tailwind CSS v4**:
+    *   Motor de estilos y utilidades (`@theme`, animaciones CSS simples como `animate-pulse`).
+
+### Efectos Identificados
+*   **Custom Cursor**: Cursor personalizado que reacciona (`mix-blend-difference`) y muestra etiquetas contextuales (`data-cursor-text="INICIAR"`).
+*   **Hero Reveal**: Títulos con `mix-blend-screen` sobre fondos animados.
+*   **Micro-interacciones**:
+    *   Botones: `hover:scale-105`, `transition-transform`.
+    *   Enlaces: Flechas que se mueven (`group-hover:translate-x-1`).
+*   **Vignette**: Capa de gradiente `bg-gradient-to-t` para asegurar legibilidad de texto sobre fondos complejos.

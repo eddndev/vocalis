@@ -1,0 +1,125 @@
+---
+const currentYear = new Date().getFullYear();
+---
+
+<footer
+    id="site-footer"
+    class="relative z-20 w-full pt-24 pb-12 px-6 sm:px-12 border-t border-black/5 overflow-hidden"
+>
+    <div class="mx-auto max-w-[1800px]">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-20 items-end">
+            <!-- Empty Space / Description (Replaces Services) -->
+            <div class="space-y-8 lg:max-w-xl">
+                <h2
+                    class="text-xs font-mono text-brand-primary tracking-widest mb-4 reveal-footer"
+                >
+                    [ CONTACTO ]
+                </h2>
+                <p
+                    class="text-text-muted text-lg leading-relaxed reveal-footer"
+                >
+                    Vocalis es un proyecto de código abierto diseñado para
+                    demostrar las capacidades de Rust y WebAssembly en el
+                    procesamiento de señales en tiempo real.
+                </p>
+            </div>
+
+            <!-- CTA / Contact -->
+            <div class="flex flex-col justify-between h-full">
+                <div>
+                    <h3
+                        class="text-5xl lg:text-7xl font-black tracking-tighter leading-[0.9] mb-8 reveal-footer text-black"
+                    >
+                        LET'S <br />
+                        <span class="text-brand-primary">BUILD.</span>
+                    </h3>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-6 reveal-footer">
+                    <!-- Primary CTA -->
+                    <a
+                        href="https://wa.me/521562101391"
+                        target="_blank"
+                        class="group relative inline-flex items-center justify-center px-8 py-4 bg-black text-white font-bold rounded-full overflow-hidden transition-transform hover:scale-105"
+                    >
+                        <span class="relative z-10 transition-colors"
+                            >Iniciar Conversación</span
+                        >
+                        <!-- Hover Effect -->
+                        <div
+                            class="absolute inset-0 bg-brand-primary opacity-0 group-hover:opacity-20 transition-opacity duration-300"
+                        >
+                        </div>
+                    </a>
+
+                    <!-- Secondary CTA -->
+                    <a
+                        href="mailto:contacto@eddndev.com"
+                        class="group inline-flex items-center justify-center px-8 py-4 border border-black/10 text-black font-medium rounded-full transition-all hover:scale-105 hover:bg-black/5 hover:border-black/30"
+                    >
+                        contacto@eddndev.com
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Minimal Footer Info -->
+        <div
+            class="mt-24 pt-8 border-t border-black/5 flex flex-col sm:flex-row justify-between items-center text-xs text-text-muted font-mono reveal-footer"
+        >
+            <span
+                >&copy; 2020 - {currentYear} EDDNDEV STUDIO. ALL RIGHTS RESERVED.</span
+            >
+            <div class="flex gap-4 mt-4 sm:mt-0">
+                <a
+                    href="https://github.com/achronyme"
+                    target="_blank"
+                    class="hover:text-black transition-colors">ACHRONYME</a
+                >
+                <a
+                    href="https://github.com/eddndev"
+                    target="_blank"
+                    class="hover:text-black transition-colors">GITHUB</a
+                >
+                <a
+                    href="https://linkedin.com/in/eddndev"
+                    target="_blank"
+                    class="hover:text-black transition-colors">LINKEDIN</a
+                >
+                <a
+                    href="https://instagram.com/_eddndev"
+                    target="_blank"
+                    class="hover:text-black transition-colors">INSTAGRAM</a
+                >
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+    import { gsap } from "gsap";
+    import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+    gsap.registerPlugin(ScrollTrigger);
+
+    const initFooterAnimations = () => {
+        const footers = document.querySelectorAll(".reveal-footer");
+
+        if (footers.length === 0) return;
+
+        gsap.from(footers, {
+            y: 50,
+            opacity: 0,
+            duration: 1,
+            stagger: 0.1,
+            ease: "power2.out",
+            scrollTrigger: {
+                trigger: "#site-footer",
+                start: "top 80%",
+                toggleActions: "play none none reverse",
+            },
+        });
+    };
+
+    document.addEventListener("DOMContentLoaded", initFooterAnimations);
+</script>

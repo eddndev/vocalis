@@ -1,0 +1,285 @@
+---
+
+---
+
+<section
+    id="hero"
+    class="relative min-h-[100dvh] w-full flex flex-col justify-end pb-24 px-6 sm:px-12 overflow-hidden"
+>
+    <!-- Canvas Background -->
+    <canvas id="smoke-canvas" class="absolute inset-0 z-0 w-full h-full block"
+    ></canvas>
+
+    <!-- Vignette for smooth fade at bottom -->
+    <div
+        class="absolute inset-0 z-10 bg-gradient-to-t from-white via-transparent to-transparent pointer-events-none"
+    >
+    </div>
+
+    <!-- Content -->
+    <div
+        class="relative z-20 w-full max-w-[1800px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-end"
+    >
+        <!-- Text Column -->
+        <div class="col-span-12 lg:col-span-8 flex flex-col gap-6">
+            <!-- Badge -->
+            <div class="hero-reveal overflow-hidden">
+                <span
+                    class="inline-block text-brand-primary text-sm font-mono tracking-widest uppercase mb-2"
+                >
+                    Real-time DSP Vowel Analysis
+                </span>
+            </div>
+
+            <!-- Main Headline -->
+            <h1
+                class="font-black tracking-tighter leading-[0.85] text-black select-none cursor-default py-4"
+            >
+                <div class="hero-reveal">
+                    <span
+                        id="vocalis-title"
+                        class="flex text-[clamp(3.5rem,11vw,10rem)]"
+                    >
+                        <!-- Split Text for Wave Effect -->
+                        {
+                            "VOCALIS"
+                                .split("")
+                                .map((char) => (
+                                    <span class="char inline-block will-change-transform hover:text-brand-primary transition-colors duration-300">
+                                        {char}
+                                    </span>
+                                ))
+                        }
+                    </span>
+                </div>
+            </h1>
+
+            <!-- Subheadline -->
+            <div class="hero-reveal overflow-hidden max-w-2xl mt-4">
+                <p
+                    class="text-lg lg:text-xl text-text-muted font-light leading-relaxed"
+                >
+                    Un motor de análisis espectral impulsado por DSP y Rust.
+                    Clasificación precisa de vocales en tiempo real,
+                    directamente en tu navegador. Sin cajas negras, solo física.
+                </p>
+            </div>
+
+            <!-- CTA -->
+            <div class="hero-reveal mt-8">
+                <a
+                    href="#tool"
+                    class="group relative inline-flex items-center gap-3 px-8 py-4 bg-black text-white font-bold tracking-tight text-lg rounded-full overflow-hidden hover:scale-105 transition-transform duration-300"
+                >
+                    <span class="relative z-10">Probar Motor</span>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="relative z-10 transition-transform group-hover:translate-x-1"
+                        ><line x1="5" y1="12" x2="19" y2="12"></line><polyline
+                            points="12 5 19 12 12 19"></polyline></svg
+                    >
+
+                    <!-- Hover Effect Background -->
+                    <div
+                        class="absolute inset-0 bg-brand-primary opacity-0 group-hover:opacity-10 transition-opacity duration-300"
+                    >
+                    </div>
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+    import { gsap } from "gsap";
+
+    // --- Smoke/Light Waves Canvas Animation ---
+    const initCanvas = () => {
+        const canvas = document.getElementById(
+            "smoke-canvas",
+        ) as HTMLCanvasElement;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        let width = 0;
+        let height = 0;
+        let time = 0;
+
+        // Configuration
+        const waveCount = 5; // Reduced from 6 for cleaner look
+        const colors = [
+            "#8150ec", // Bluish Purple (Requested)
+            "#06b6d4", // Cyan
+            "#4c1d95", // Deep Purple (Kept for depth)
+            "#a78bfa", // Soft Purple (Added for variety/transition)
+        ];
+
+        const resize = () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        };
+
+        window.addEventListener("resize", resize);
+        resize();
+
+        const animate = () => {
+            // Clear transparently (let Spotlight Grid & Body BG show through)
+            ctx.clearRect(0, 0, width, height);
+
+            // 'multiply' for nice mixing on white
+            ctx.globalCompositeOperation = "multiply";
+            // Moderate blur for smoke/soft effect
+            ctx.filter = "blur(12px)"; // Reduced slightly for definition
+            ctx.lineWidth = 40; // Thinner lines for spectral look
+
+            time += 0.008;
+
+            // Draw wider than screen to hide edges
+            const extend = 200;
+
+            for (let i = 0; i < waveCount; i++) {
+                ctx.beginPath();
+                const color = colors[i % colors.length];
+                ctx.strokeStyle = color;
+                // Vary opacity for depth
+                ctx.globalAlpha = 0.6;
+
+                // Unique parameters per wave
+                const speed = 0.5 + i * 0.1;
+                const freq = 0.001 + i * 0.0005;
+                const baseAmp = height * 0.15;
+
+                // Vertical center with slow drift
+                const centerY = height * 0.6 + Math.sin(time * 0.3 + i) * 50;
+
+                for (let x = -extend; x < width + extend; x += 10) {
+                    // Spectral-like synthesis: Primary Sine + Harmonics + Noise
+                    const wave1 = Math.sin(x * freq + time * speed);
+                    const wave2 =
+                        Math.sin(x * (freq * 2.5) - time * speed * 1.5) * 0.4;
+                    const wave3 = Math.sin(x * (freq * 5.0) + time) * 0.15; // Higher freq ripple
+
+                    // Modulate amplitude across the screen (taper at edges, swell in center)
+                    // Normalize x to -1 to 1 range relative to screen center
+                    const normX = (x / width) * 2 - 1;
+                    const envelope = Math.exp(-2 * normX * normX); // Gaussian-ish envelope
+
+                    const y =
+                        centerY +
+                        (wave1 + wave2 + wave3) *
+                            baseAmp *
+                            (0.5 + envelope * 1.5);
+
+                    if (x === -extend) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+
+                ctx.stroke();
+            }
+
+            // Reset context
+            ctx.globalCompositeOperation = "source-over";
+            ctx.filter = "none";
+            ctx.globalAlpha = 1;
+
+            requestAnimationFrame(animate);
+        };
+
+        animate();
+    };
+
+    // --- Interactive Title Wave ---
+    const initTitleWave = () => {
+        const titleContainer = document.getElementById("vocalis-title");
+        if (!titleContainer) return;
+
+        const chars = titleContainer.querySelectorAll(".char");
+        if (chars.length === 0) return;
+
+        let mouseX = 0;
+        let isHovering = false;
+
+        titleContainer.addEventListener("mousemove", (e) => {
+            isHovering = true;
+            const rect = titleContainer.getBoundingClientRect();
+            // Normalize mouse X relative to the title width (0 to 1)
+            mouseX = (e.clientX - rect.left) / rect.width;
+
+            // Calculate wave
+            requestAnimationFrame(() => {
+                const freq = 0.6; // Frequency of the wave
+
+                chars.forEach((char, i) => {
+                    // Logic: We want the PEAK (sin = 1) to be at the mouse position.
+                    // sin(x) peaks at PI/2.
+                    // We want: i * freq + phase = PI/2  WHEN  i == mouseIndex
+                    // Therefore: phase = PI/2 - (mouseIndex * freq)
+
+                    const mouseIndex = mouseX * (chars.length - 1); // Map 0-1 to index range
+                    const phase = Math.PI / 2 - mouseIndex * freq;
+
+                    const angle = i * freq + phase;
+
+                    // Responsive Amplitude: 10px on mobile, 20px on desktop
+                    const isMobile = window.innerWidth < 768;
+                    const amplitude = isMobile ? 10 : 20;
+
+                    const yOffset = Math.sin(angle) * amplitude;
+
+                    gsap.to(char, {
+                        y: yOffset,
+                        duration: 0.4,
+                        ease: "power2.out",
+                        color: "#5b21b6", // Darker Violet (violet-800) close to black
+                    });
+                });
+            });
+        });
+
+        titleContainer.addEventListener("mouseleave", () => {
+            isHovering = false;
+            // Reset positions
+            gsap.to(chars, {
+                y: 0,
+                duration: 0.5,
+                ease: "elastic.out(1, 0.5)",
+                color: "black",
+                stagger: 0.05,
+            });
+        });
+    };
+
+    // --- GSAP Animations ---
+    const initAnimations = () => {
+        const reveals = document.querySelectorAll(".hero-reveal > *"); // Target immediate children
+
+        if (reveals.length === 0) return;
+
+        gsap.from(reveals, {
+            y: 50, // Reduced from 100 to avoid clipping issues
+            opacity: 0,
+            duration: 1.0,
+            stagger: 0.1,
+            ease: "power3.out",
+            delay: 0.1,
+            clearProps: "all", // Ensure clean state after animation
+        });
+    };
+
+    // Run on mount
+    document.addEventListener("DOMContentLoaded", () => {
+        initCanvas();
+        initAnimations();
+        initTitleWave();
+    });
+</script>

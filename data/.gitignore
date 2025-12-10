@@ -1,6 +1,0 @@
-# Ignorar todo dentro de esta carpeta
-*
-
-# Excepciones (Archivos que SÍ queremos en el repo)
-!README.md
-!.gitignore

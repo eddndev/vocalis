@@ -1,0 +1,28 @@
+[package]
+name = "vocalis_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "vocalis_core"
+path = "src/lib.rs"
+
+[dependencies]
+# For ONNX model inference
+ort = { version = "2.0.0-rc.9", features = ["ndarray"] }
+
+# For WAV audio file loading
+hound = "3.5"
+
+# General utility
+ndarray = "0.16"
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Lazy static initialization (e.g., for ONNX model)
+once_cell = "1.19"
+
+# Logging
+log = "0.4"
+env_logger = "0.11"

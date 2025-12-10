@@ -1,0 +1,28 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navbar from "../components/ui/Navbar.astro";
+import Hero from "../components/landing/Hero.astro";
+---
+
+<Layout title="Vocalis | DSP Vowel Analysis">
+	<Navbar />
+
+	<main>
+		<Hero />
+
+		<!-- Placeholder for Tool Section -->
+		<section
+			id="tool"
+			class="min-h-screen flex items-center justify-center border-t border-white/10"
+		>
+			<div class="text-center">
+				<h2 class="text-4xl font-bold text-white mb-4">
+					Motor de Análisis
+				</h2>
+				<p class="text-text-muted">
+					Próximamente: Visualización y Clasificación WASM
+				</p>
+			</div>
+		</section>
+	</main>
+</Layout>

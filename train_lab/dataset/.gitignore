@@ -1,6 +1,0 @@
-# Ignorar clips de audio generados por el procesamiento del dataset
-audio/
-
-# Ignorar posibles archivos de features o modelos intermedios
-*.npy
-*.pt

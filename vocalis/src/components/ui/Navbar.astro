@@ -1,0 +1,46 @@
+---
+const links = [
+    { text: "Inicio", href: "#", active: true },
+    { text: "Herramienta", href: "#tool" },
+    { text: "Reporte", href: "/report" },
+];
+---
+
+<nav class="fixed top-0 w-full z-50 px-6 py-6 sm:px-12 text-black">
+    <div class="max-w-[1800px] mx-auto flex justify-between items-center">
+        <!-- Logo / Brand -->
+        <a
+            href="/"
+            class="text-xl font-bold tracking-tighter hover:opacity-80 transition-opacity"
+        >
+            Vocalis
+        </a>
+
+        <!-- Navigation Links -->
+        <ul class="hidden md:flex items-center gap-8">
+            {
+                links.map((link) => (
+                    <li>
+                        <a
+                            href={link.href}
+                            class:list={[
+                                "text-sm tracking-widest uppercase hover:text-brand-primary transition-colors duration-300",
+                                {
+                                    "text-black": !link.active,
+                                    "text-brand-primary": link.active,
+                                },
+                            ]}
+                        >
+                            {link.text}
+                        </a>
+                    </li>
+                ))
+            }
+        </ul>
+
+        <!-- Mobile Menu Trigget (Placeholder) -->
+        <button class="md:hidden text-sm uppercase tracking-widest">
+            Menu
+        </button>
+    </div>
+</nav>

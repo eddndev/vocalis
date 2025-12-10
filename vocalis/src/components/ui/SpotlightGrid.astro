@@ -1,0 +1,86 @@
+<canvas id="spotlight-grid" class="fixed inset-0 z-[5] pointer-events-none"
+></canvas>
+
+<script>
+    const initGrid = () => {
+        const canvas = document.getElementById(
+            "spotlight-grid",
+        ) as HTMLCanvasElement;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        let width = 0;
+        let height = 0;
+        let mouseX = -1000;
+        let mouseY = -1000;
+
+        // Configuration
+        const gridSize = 40;
+        const squareSize = 3;
+        // const gap = gridSize - squareSize; // Unused but implied
+        const spotlightRadius = 300; // Slightly smaller for more focus
+
+        const resize = () => {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        };
+
+        window.addEventListener("resize", resize);
+        window.addEventListener("mousemove", (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        resize();
+
+        const draw = () => {
+            ctx.clearRect(0, 0, width, height);
+
+            // 1. Draw the "Spotlight" Gradient (The Reveal)
+            // using a BLUE/CYAN color as requested ("azulado")
+            const gradient = ctx.createRadialGradient(
+                mouseX,
+                mouseY,
+                0,
+                mouseX,
+                mouseY,
+                spotlightRadius,
+            );
+
+            // Color: #06b6d4 (Cyan-500) or similar.
+            // High opacity in center to be clearly visible against white.
+            gradient.addColorStop(0, "rgba(6, 182, 212, 0.8)");
+            gradient.addColorStop(0.5, "rgba(6, 182, 212, 0.3)");
+            gradient.addColorStop(1, "rgba(6, 182, 212, 0)");
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            // 2. Mask the Gradient with the Grid
+            // Keep existing content (blue gradient) ONLY where new content (grid squares) overlaps.
+            ctx.globalCompositeOperation = "destination-in";
+
+            ctx.beginPath();
+            // Draw all squares
+            for (let x = 0; x < width; x += gridSize) {
+                for (let y = 0; y < height; y += gridSize) {
+                    ctx.rect(x, y, squareSize, squareSize);
+                }
+            }
+            ctx.fill();
+
+            // Reset composite operation
+            ctx.globalCompositeOperation = "source-over";
+
+            requestAnimationFrame(draw);
+        };
+
+        draw();
+    };
+
+    // Initialize on load
+    document.addEventListener("DOMContentLoaded", initGrid);
+    document.addEventListener("astro:page-load", initGrid);
+</script>
