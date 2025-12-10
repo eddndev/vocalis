@@ -7,13 +7,12 @@
     class="relative min-h-[100dvh] w-full flex flex-col justify-end pb-24 px-6 sm:px-12 overflow-hidden"
 >
     <!-- Canvas Background -->
-    <canvas
-        id="smoke-canvas"
-        class="absolute inset-0 z-0 w-full h-full block bg-[#050505]"></canvas>
+    <canvas id="smoke-canvas" class="absolute inset-0 z-0 w-full h-full block"
+    ></canvas>
 
-    <!-- Vignette for readability -->
+    <!-- Vignette for smooth fade at bottom -->
     <div
-        class="absolute inset-0 z-10 bg-gradient-to-t from-[#ffffff] via-[#ffffff]/40 to-transparent pointer-events-none"
+        class="absolute inset-0 z-10 bg-gradient-to-t from-white via-transparent to-transparent pointer-events-none"
     >
     </div>
 
@@ -33,11 +32,25 @@
             </div>
 
             <!-- Main Headline -->
-            <h1 class="font-black tracking-tighter leading-[0.85] text-black">
+            <h1
+                class="font-black tracking-tighter leading-[0.85] text-black select-none cursor-default"
+            >
                 <div class="hero-reveal overflow-hidden">
-                    <span class="block text-[clamp(3.5rem,11vw,10rem)]"
-                        >Vocalis</span
+                    <span
+                        id="vocalis-title"
+                        class="flex text-[clamp(3.5rem,11vw,10rem)]"
                     >
+                        <!-- Split Text for Wave Effect -->
+                        {
+                            "Vocalis"
+                                .split("")
+                                .map((char) => (
+                                    <span class="char inline-block will-change-transform hover:text-brand-primary transition-colors duration-300">
+                                        {char}
+                                    </span>
+                                ))
+                        }
+                    </span>
                 </div>
             </h1>
 
@@ -53,7 +66,7 @@
             </div>
 
             <!-- CTA -->
-            <div class="hero-reveal overflow-hidden mt-8">
+            <div class="hero-reveal mt-8">
                 <a
                     href="#tool"
                     class="group relative inline-flex items-center gap-3 px-8 py-4 bg-black text-white font-bold tracking-tight text-lg rounded-full overflow-hidden hover:scale-105 transition-transform duration-300"
@@ -103,11 +116,12 @@
         let time = 0;
 
         // Configuration
-        const waveCount = 6;
+        const waveCount = 5; // Reduced from 6 for cleaner look
         const colors = [
-            "#8b5cf6", // Purple
+            "#8150ec", // Bluish Purple (Requested)
             "#06b6d4", // Cyan
-            "#4c1d95", // Deep Purple
+            "#4c1d95", // Deep Purple (Kept for depth)
+            "#a78bfa", // Soft Purple (Added for variety/transition)
         ];
 
         const resize = () => {
@@ -119,51 +133,117 @@
         resize();
 
         const animate = () => {
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, width, height);
+            // Clear transparently (let Spotlight Grid & Body BG show through)
+            ctx.clearRect(0, 0, width, height);
 
-            // 'multiply' for "ink" or "dark smoke" effect on white
+            // 'multiply' for nice mixing on white
             ctx.globalCompositeOperation = "multiply";
-            // Reduced blur for definition
-            ctx.filter = "blur(20px)";
-            ctx.lineWidth = 150;
+            // Moderate blur for smoke/soft effect
+            ctx.filter = "blur(12px)"; // Reduced slightly for definition
+            ctx.lineWidth = 40; // Thinner lines for spectral look
 
-            time += 0.005;
+            time += 0.008;
+
+            // Draw wider than screen to hide edges
+            const extend = 200;
 
             for (let i = 0; i < waveCount; i++) {
                 ctx.beginPath();
-
                 const color = colors[i % colors.length];
                 ctx.strokeStyle = color;
+                // Vary opacity for depth
+                ctx.globalAlpha = 0.6;
 
-                // Organic movement parameters
-                // Different speeds and frequencies for interference
-                const speed = i * 0.5 + 1;
-                const amplitude = height * 0.25;
-                const centerY = height / 2 + Math.sin(time * speed * 0.5) * 100;
+                // Unique parameters per wave
+                const speed = 0.5 + i * 0.1;
+                const freq = 0.001 + i * 0.0005;
+                const baseAmp = height * 0.15;
 
-                for (let x = 0; x < width; x += 30) {
-                    // Overlapping sine waves
+                // Vertical center with slow drift
+                const centerY = height * 0.6 + Math.sin(time * 0.3 + i) * 50;
+
+                for (let x = -extend; x < width + extend; x += 10) {
+                    // Spectral-like synthesis: Primary Sine + Harmonics + Noise
+                    const wave1 = Math.sin(x * freq + time * speed);
+                    const wave2 =
+                        Math.sin(x * (freq * 2.5) - time * speed * 1.5) * 0.4;
+                    const wave3 = Math.sin(x * (freq * 5.0) + time) * 0.15; // Higher freq ripple
+
+                    // Modulate amplitude across the screen (taper at edges, swell in center)
+                    // Normalize x to -1 to 1 range relative to screen center
+                    const normX = (x / width) * 2 - 1;
+                    const envelope = Math.exp(-2 * normX * normX); // Gaussian-ish envelope
+
                     const y =
                         centerY +
-                        Math.sin(x * 0.002 + time * speed + i) * amplitude +
-                        Math.sin(x * 0.01 + time) * (amplitude * 0.2); // Add detail
+                        (wave1 + wave2 + wave3) *
+                            baseAmp *
+                            (0.5 + envelope * 1.5);
 
-                    if (x === 0) ctx.moveTo(x, y);
+                    if (x === -extend) ctx.moveTo(x, y);
                     else ctx.lineTo(x, y);
                 }
 
                 ctx.stroke();
             }
 
-            // Reset context for next frame
+            // Reset context
             ctx.globalCompositeOperation = "source-over";
             ctx.filter = "none";
+            ctx.globalAlpha = 1;
 
             requestAnimationFrame(animate);
         };
 
         animate();
+    };
+
+    // --- Interactive Title Wave ---
+    const initTitleWave = () => {
+        const titleContainer = document.getElementById("vocalis-title");
+        if (!titleContainer) return;
+
+        const chars = titleContainer.querySelectorAll(".char");
+        if (chars.length === 0) return;
+
+        let mouseX = 0;
+        let isHovering = false;
+
+        titleContainer.addEventListener("mousemove", (e) => {
+            isHovering = true;
+            const rect = titleContainer.getBoundingClientRect();
+            // Normalize mouse X relative to the title width (0 to 1)
+            mouseX = (e.clientX - rect.left) / rect.width;
+
+            // Calculate wave
+            requestAnimationFrame(() => {
+                chars.forEach((char, i) => {
+                    // Sinusoidal offset calculation
+                    // We offset the phase based on mouse position to make it "travel"
+                    const phase = i * 0.5 + mouseX * Math.PI * 2;
+                    const yOffset = Math.sin(phase) * 15; // 15px amplitude
+
+                    gsap.to(char, {
+                        y: yOffset,
+                        duration: 0.3,
+                        ease: "power2.out",
+                        color: "#8150ec", // Highlight color (Bluish Purple)
+                    });
+                });
+            });
+        });
+
+        titleContainer.addEventListener("mouseleave", () => {
+            isHovering = false;
+            // Reset positions
+            gsap.to(chars, {
+                y: 0,
+                duration: 0.5,
+                ease: "elastic.out(1, 0.5)",
+                color: "black",
+                stagger: 0.05,
+            });
+        });
     };
 
     // --- GSAP Animations ---
@@ -173,12 +253,13 @@
         if (reveals.length === 0) return;
 
         gsap.from(reveals, {
-            y: 100,
+            y: 50, // Reduced from 100 to avoid clipping issues
             opacity: 0,
-            duration: 1.5,
+            duration: 1.0,
             stagger: 0.1,
             ease: "power3.out",
-            delay: 0.2, // Wait a bit for layout
+            delay: 0.1,
+            clearProps: "all", // Ensure clean state after animation
         });
     };
 
@@ -186,5 +267,6 @@
     document.addEventListener("DOMContentLoaded", () => {
         initCanvas();
         initAnimations();
+        initTitleWave();
     });
 </script>
