@@ -25,19 +25,30 @@ def extract_svm_params(pipeline):
     # Para multiclass 'ovr' (one-vs-rest) o 'ovo' (one-vs-one).
     # Sklearn usa 'ovo' por defecto para multiclass SVC.
     
+    svm_params = {
+        "gamma": svm._gamma,
+        "intercept": svm.intercept_.tolist(),
+        "dual_coef": svm.dual_coef_.tolist(),
+        "support_vectors": svm.support_vectors_.tolist(),
+        "n_support": svm.n_support_.tolist(),
+        "classes": svm.classes_.tolist()
+    }
+
+    # Extract Probability Parameters (Platt Scaling) if available
+    if hasattr(svm, 'probA_') and hasattr(svm, 'probB_'):
+        svm_params["probA"] = svm.probA_.tolist()
+        svm_params["probB"] = svm.probB_.tolist()
+    else:
+        print(f"WARNING: The model does not have probability calibration (probA_, probB_).")
+        svm_params["probA"] = []
+        svm_params["probB"] = []
+
     params = {
         "scaler": {
             "mean": mean,
             "scale": scale
         },
-        "svm": {
-            "gamma": svm._gamma,
-            "intercept": svm.intercept_.tolist(),
-            "dual_coef": svm.dual_coef_.tolist(),
-            "support_vectors": svm.support_vectors_.tolist(),
-            "n_support": svm.n_support_.tolist(),
-            "classes": svm.classes_.tolist()
-        }
+        "svm": svm_params
     }
     
     return params

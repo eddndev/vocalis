@@ -263,6 +263,60 @@ async function runInference(audioData) {
 
         vowelElement.textContent = prediction.vowel;
         genderElement.textContent = prediction.gender;
+
+        // Render Probabilities
+        const probContainer = document.getElementById('probabilities');
+        probContainer.innerHTML = ''; // Clear previous
+
+        if (prediction.probabilities && Array.isArray(prediction.probabilities)) {
+            prediction.probabilities.forEach(([label, score]) => {
+                const percent = (score * 100).toFixed(1);
+
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.alignItems = 'center';
+                row.style.gap = '10px';
+                row.style.fontSize = '14px';
+
+                // Label
+                const labelSpan = document.createElement('span');
+                labelSpan.textContent = label;
+                labelSpan.style.width = '20px';
+                labelSpan.style.fontWeight = 'bold';
+
+                // Bar container
+                const barWrapper = document.createElement('div');
+                barWrapper.style.flex = '1';
+                barWrapper.style.backgroundColor = '#333';
+                barWrapper.style.height = '10px';
+                barWrapper.style.borderRadius = '5px';
+                barWrapper.style.overflow = 'hidden';
+
+                // Bar fill
+                const barFill = document.createElement('div');
+                barFill.style.width = `${percent}%`;
+                barFill.style.height = '100%';
+                // Logic used for color: High = Green, Med = Yellow, Low = Red
+                const color = score > 0.8 ? '#4ade80' : (score > 0.4 ? '#facc15' : '#ef4444');
+                barFill.style.backgroundColor = color;
+
+                barWrapper.appendChild(barFill);
+
+                // Text value
+                const valueSpan = document.createElement('span');
+                valueSpan.textContent = `${percent}%`;
+                valueSpan.style.width = '45px';
+                valueSpan.style.textAlign = 'right';
+                valueSpan.style.fontFamily = 'monospace';
+
+                row.appendChild(labelSpan);
+                row.appendChild(barWrapper);
+                row.appendChild(valueSpan);
+
+                probContainer.appendChild(row);
+            });
+        }
+
         statusElement.textContent = 'Status: Inference complete. Ready to record.';
 
         console.log('Prediction:', prediction);

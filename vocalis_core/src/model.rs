@@ -26,10 +26,15 @@ pub struct SvmParams {
     pub support_vectors: Vec<Vec<f32>>,
     pub n_support: Vec<i32>,
     pub classes: Vec<String>,
+    #[serde(default)] // Allow missing for backward compatibility
+    pub probA: Vec<f32>,
+    #[serde(default)]
+    pub probB: Vec<f32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PredictionResult {
     pub vowel: String,
     pub gender: String,
+    pub probabilities: Vec<(String, f32)>,
 }

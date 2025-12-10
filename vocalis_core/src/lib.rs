@@ -101,12 +101,18 @@ pub fn predict_vowel_internal(audio_data: &[f32], sample_rate: f32) -> Result<St
         &model.model_female
     };
     
-    // 4. Inferencia SVM
-    let vowel = inference::Predictor::predict(&mfccs_for_prediction, svm_model);
+    // 4. Inferencia SVM (Probabilística)
+    let probabilities = inference::Predictor::predict_proba(&mfccs_for_prediction, svm_model);
+    
+    // El ganador es el primero (ya está ordenado)
+    let vowel = probabilities.first()
+        .map(|(label, _)| label.clone())
+        .unwrap_or_else(|| "Unknown".to_string());
     
     let result = PredictionResult {
         vowel: vowel,
         gender: format!("{} (DSP)", gender_char),
+        probabilities: probabilities,
     };
 
     serde_json::to_string(&result)
