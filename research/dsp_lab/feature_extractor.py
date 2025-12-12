@@ -60,6 +60,109 @@ def get_features(y, sr=16000):
         
     return features
 
+def get_syllable_features(y, sr=16000, onset_ratio=0.35, transition_ratio=0.15):
+    """
+    Extract 39-dimensional feature vector for CV syllables.
+    
+    Segments the audio into 3 temporal regions:
+    - Onset (35%): Captures consonant characteristics
+    - Transition (15%): Captures coarticulation between consonant and vowel
+    - Nucleus (50%): Captures the vowel
+    
+    Each region gets 13 MFCCs (averaged over time), resulting in 39 total features.
+    
+    Args:
+        y: Audio signal (numpy array)
+        sr: Sample rate (default 16000)
+        onset_ratio: Proportion of audio for onset region (default 0.35)
+        transition_ratio: Proportion for transition region (default 0.15)
+    
+    Returns:
+        dict with keys: mfcc_onset_0..12, mfcc_trans_0..12, mfcc_nucleus_0..12
+    """
+    features = {}
+    
+    # Ensure minimum length for MFCC extraction
+    min_samples = 512  # Minimum for n_fft=512
+    if len(y) < min_samples * 3:
+        y = librosa.util.fix_length(y, size=min_samples * 3)
+    
+    total_samples = len(y)
+    
+    # Calculate split points
+    onset_end = int(total_samples * onset_ratio)
+    trans_end = int(total_samples * (onset_ratio + transition_ratio))
+    
+    # Ensure each segment has minimum size
+    onset_end = max(onset_end, min_samples)
+    trans_end = max(trans_end, onset_end + min_samples)
+    
+    # Split audio into 3 regions
+    y_onset = y[:onset_end]
+    y_transition = y[onset_end:trans_end]
+    y_nucleus = y[trans_end:]
+    
+    # Pad segments if too short
+    if len(y_onset) < min_samples:
+        y_onset = librosa.util.fix_length(y_onset, size=min_samples)
+    if len(y_transition) < min_samples:
+        y_transition = librosa.util.fix_length(y_transition, size=min_samples)
+    if len(y_nucleus) < min_samples:
+        y_nucleus = librosa.util.fix_length(y_nucleus, size=min_samples)
+    
+    # MFCC parameters (same as vowel extraction for consistency with Rust)
+    mfcc_params = {
+        'sr': sr,
+        'n_mfcc': 13,
+        'n_mels': 40,
+        'htk': True,
+        'n_fft': 512,  # Smaller for short segments
+        'hop_length': 128
+    }
+    
+    # Extract MFCCs for each region
+    try:
+        mfcc_onset = librosa.feature.mfcc(y=y_onset, **mfcc_params)
+        mfcc_trans = librosa.feature.mfcc(y=y_transition, **mfcc_params)
+        mfcc_nucleus = librosa.feature.mfcc(y=y_nucleus, **mfcc_params)
+        
+        # Bag-of-frames (temporal average) for each region
+        onset_mean = np.mean(mfcc_onset, axis=1)
+        trans_mean = np.mean(mfcc_trans, axis=1)
+        nucleus_mean = np.mean(mfcc_nucleus, axis=1)
+        
+        # Store in feature dict
+        for i in range(13):
+            features[f'mfcc_onset_{i}'] = onset_mean[i]
+            features[f'mfcc_trans_{i}'] = trans_mean[i]
+            features[f'mfcc_nucleus_{i}'] = nucleus_mean[i]
+            
+    except Exception as e:
+        # Fallback: return zeros if extraction fails
+        for i in range(13):
+            features[f'mfcc_onset_{i}'] = 0.0
+            features[f'mfcc_trans_{i}'] = 0.0
+            features[f'mfcc_nucleus_{i}'] = 0.0
+    
+    return features
+
+
+def get_pitch_for_gender(y, sr=16000):
+    """
+    Extract F0 (pitch) for gender detection.
+    Returns median F0 in Hz, or 0 if unvoiced.
+    """
+    if len(y) < 1024:
+        y = librosa.util.fix_length(y, size=1024)
+    
+    f0, voiced_flag, _ = librosa.pyin(y, fmin=50, fmax=400, sr=sr, frame_length=1024)
+    valid_f0 = f0[voiced_flag]
+    
+    if len(valid_f0) > 0:
+        return np.nanmedian(valid_f0)
+    return 0
+
+
 # Bloque de prueba rápida
 if __name__ == "__main__":
     import sys
@@ -69,5 +172,13 @@ if __name__ == "__main__":
     # Simular un tono de 150Hz (Hombre) + armónicos
     y = 0.5 * np.sin(2 * np.pi * 150 * t)
     
+    # Test vowel features (original)
     feats = get_features(y, sr)
-    print(f"Prueba con tono sintético 150Hz: {feats}")
+    print(f"Vowel features (13 dims): {len([k for k in feats if k.startswith('mfcc_')])} MFCCs")
+    
+    # Test syllable features (new)
+    syl_feats = get_syllable_features(y, sr)
+    print(f"Syllable features (39 dims): {len(syl_feats)} features")
+    print(f"  Onset: {[f'mfcc_onset_{i}' for i in range(3)]}...")
+    print(f"  Trans: {[f'mfcc_trans_{i}' for i in range(3)]}...")
+    print(f"  Nucleus: {[f'mfcc_nucleus_{i}' for i in range(3)]}...")

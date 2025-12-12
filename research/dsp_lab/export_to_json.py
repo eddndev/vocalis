@@ -53,42 +53,102 @@ def extract_svm_params(pipeline):
     
     return params
 
-def main():
-    print("Exportando modelos a JSON para Rust...")
-    
-    # Cargar modelos
-    path_m = os.path.join(MODEL_DIR, "svm_model_M.pkl")
-    path_f = os.path.join(MODEL_DIR, "svm_model_F.pkl")
-    
-    if not os.path.exists(path_m) or not os.path.exists(path_f):
-        print("Error: No se encuentran los archivos .pkl en", MODEL_DIR)
-        return
+def load_model_safe(path):
+    """Load a model file, return None if not found."""
+    if os.path.exists(path):
+        return joblib.load(path)
+    return None
 
-    model_m = joblib.load(path_m)
-    model_f = joblib.load(path_f)
+
+def main():
+    print("=" * 60)
+    print("Exporting models to JSON for Rust/WASM...")
+    print("=" * 60)
     
-    # Extraer datos
-    data = {
-        "model_male": extract_svm_params(model_m),
-        "model_female": extract_svm_params(model_f)
-    }
+    data = {}
     
-    # Guardar JSON
+    # === VOWEL MODELS (existing) ===
+    print("\n[1/2] Vowel Models...")
+    path_vowel_m = os.path.join(MODEL_DIR, "svm_model_M.pkl")
+    path_vowel_f = os.path.join(MODEL_DIR, "svm_model_F.pkl")
+    
+    model_vowel_m = load_model_safe(path_vowel_m)
+    model_vowel_f = load_model_safe(path_vowel_f)
+    
+    if model_vowel_m:
+        data["vowel_male"] = extract_svm_params(model_vowel_m)
+        print(f"  ✓ Vowel Male: {len(data['vowel_male']['svm']['support_vectors'])} SVs")
+    else:
+        print(f"  ✗ Vowel Male: not found")
+    
+    if model_vowel_f:
+        data["vowel_female"] = extract_svm_params(model_vowel_f)
+        print(f"  ✓ Vowel Female: {len(data['vowel_female']['svm']['support_vectors'])} SVs")
+    else:
+        print(f"  ✗ Vowel Female: not found")
+    
+    # === SYLLABLE MODELS (new) ===
+    print("\n[2/2] Syllable Models...")
+    
+    # Consonant classifiers (use onset MFCCs)
+    for gender in ['M', 'F']:
+        path_cons = os.path.join(MODEL_DIR, f"svm_consonant_{gender}.pkl")
+        model_cons = load_model_safe(path_cons)
+        
+        if model_cons:
+            key = f"consonant_{'male' if gender == 'M' else 'female'}"
+            data[key] = extract_svm_params(model_cons)
+            print(f"  ✓ Consonant {gender}: {len(data[key]['svm']['support_vectors'])} SVs, classes: {data[key]['svm']['classes']}")
+        else:
+            print(f"  ✗ Consonant {gender}: not found")
+    
+    # Vowel classifiers for syllables (use nucleus MFCCs)
+    for gender in ['M', 'F']:
+        path_vowel_syl = os.path.join(MODEL_DIR, f"svm_vowel_{gender}.pkl")
+        model_vowel_syl = load_model_safe(path_vowel_syl)
+        
+        if model_vowel_syl:
+            key = f"syllable_vowel_{'male' if gender == 'M' else 'female'}"
+            data[key] = extract_svm_params(model_vowel_syl)
+            print(f"  ✓ Syllable Vowel {gender}: {len(data[key]['svm']['support_vectors'])} SVs")
+        else:
+            print(f"  ✗ Syllable Vowel {gender}: not found")
+    
+    # Full syllable classifiers (alternative approach)
+    for gender in ['M', 'F']:
+        path_full = os.path.join(MODEL_DIR, f"svm_syllable_{gender}.pkl")
+        model_full = load_model_safe(path_full)
+        
+        if model_full:
+            key = f"syllable_full_{'male' if gender == 'M' else 'female'}"
+            data[key] = extract_svm_params(model_full)
+            print(f"  ✓ Full Syllable {gender}: {len(data[key]['svm']['support_vectors'])} SVs, classes: {data[key]['svm']['classes']}")
+        else:
+            print(f"  ✗ Full Syllable {gender}: not found")
+    
+    if not data:
+        print("\nError: No models found to export!")
+        return
+    
+    # Save compact JSON
+    print(f"\nSaving to {OUTPUT_JSON}...")
     with open(OUTPUT_JSON, 'w') as f:
-        json.dump(data, f, indent=None) # Sin indent para ahorrar espacio (será grande)
+        json.dump(data, f, indent=None)
     
-    # Guardar versión legible también para debug
+    # Save debug JSON (readable)
     debug_path = OUTPUT_JSON.replace('.json', '_debug.json')
     with open(debug_path, 'w') as f:
         json.dump(data, f, indent=2)
-
-    print(f"¡Éxito! Modelo exportado a: {OUTPUT_JSON}")
     
-    # Imprimir estadísticas
-    n_vec_m = len(data['model_male']['svm']['support_vectors'])
-    n_vec_f = len(data['model_female']['svm']['support_vectors'])
-    print(f"Vectores de soporte (Hombre): {n_vec_m}")
-    print(f"Vectores de soporte (Mujer): {n_vec_f}")
+    # Report file size
+    size_mb = os.path.getsize(OUTPUT_JSON) / (1024 * 1024)
+    print(f"\n{'=' * 60}")
+    print(f"Export complete!")
+    print(f"Model file: {OUTPUT_JSON}")
+    print(f"File size: {size_mb:.2f} MB")
+    print(f"Models exported: {list(data.keys())}")
+    print(f"{'=' * 60}")
+
 
 if __name__ == "__main__":
     main()
