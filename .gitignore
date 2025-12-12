@@ -13,3 +13,12 @@
 /target/
 **/*.rs.bk
 Cargo.lock
+
+# Research - Generated datasets and features (too large for git)
+research/dsp_lab/syllable_dataset/
+research/dsp_lab/syllable_features.csv
+research/dsp_lab/unified_features.csv
+research/dsp_lab/dsp_features.csv
+research/train_lab/dataset/audio/
+research/dsp_lab/models/*.pkl
+

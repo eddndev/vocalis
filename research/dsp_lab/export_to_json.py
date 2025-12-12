@@ -126,6 +126,19 @@ def main():
         else:
             print(f"  ✗ Full Syllable {gender}: not found")
     
+    # === UNIFIED MODELS (vowels + syllables, 25 classes) ===
+    print("\n[3/3] Unified Models (25 classes)...")
+    for gender in ['M', 'F']:
+        path_unified = os.path.join(MODEL_DIR, f"svm_unified_{gender}.pkl")
+        model_unified = load_model_safe(path_unified)
+        
+        if model_unified:
+            key = f"unified_{'male' if gender == 'M' else 'female'}"
+            data[key] = extract_svm_params(model_unified)
+            print(f"  ✓ Unified {gender}: {len(data[key]['svm']['support_vectors'])} SVs, classes: {data[key]['svm']['classes']}")
+        else:
+            print(f"  ✗ Unified {gender}: not found")
+    
     if not data:
         print("\nError: No models found to export!")
         return
