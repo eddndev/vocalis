@@ -132,8 +132,8 @@
 <script>
     import init, {
         init_vocalis,
-        predict_vowel,
-    } from "../../lib/wasm/vocalis_core.js";
+        predict_unified,
+    } from "../../lib/pkg/vocalis_core.js";
 
     // --- CONFIG ---
     const EXPECTED_SAMPLE_RATE = 16000;
@@ -157,7 +157,7 @@
     const recDot = document.getElementById("rec-dot");
     const statusBadge = document.getElementById("status-badge");
     const statusText = document.getElementById("status-text");
-    const resVowel = document.getElementById("res-vowel");
+    const resVowel = document.getElementById("res-vowel"); // Maintains ID but will hold syllables too
     const resGender = document.getElementById("res-gender");
     const probList = document.getElementById("prob-list");
 
@@ -321,7 +321,8 @@
         const data = await processAudioData(decoded, EXPECTED_SAMPLE_RATE);
 
         try {
-            const resultJson = await predict_vowel(data, EXPECTED_SAMPLE_RATE);
+            // Use NEW unified prediction (25 classes)
+            const resultJson = await predict_unified(data, EXPECTED_SAMPLE_RATE);
             const result = JSON.parse(resultJson);
             renderResults(result);
             statusText.textContent = "Análisis Completo.";

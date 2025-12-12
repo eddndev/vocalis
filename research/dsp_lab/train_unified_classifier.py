@@ -20,8 +20,8 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import warnings
 warnings.filterwarnings('ignore')
 
-INPUT_CSV = "dsp_lab/unified_features.csv"
-MODEL_DIR = "dsp_lab/models"
+INPUT_CSV = "research/dsp_lab/unified_features.csv"
+MODEL_DIR = "research/dsp_lab/models"
 
 
 def get_feature_columns():
@@ -54,7 +54,25 @@ def train_unified_model(df, gender):
     
     # Class statistics
     classes = np.unique(y)
-    print(f"Total samples: {len(data)}")
+    
+    # --- PROMPT: Filter to only Vowels + M/P Syllables to improve accuracy ---
+    # Requested by user: Reduce cardinality to 2 consonant families (M & P)
+    valid_syllables = [
+        'a', 'e', 'i', 'o', 'u',  # Vowels
+        'ma', 'me', 'mi', 'mo', 'mu', # M family
+        'pa', 'pe', 'pi', 'po', 'pu'  # P family
+    ]
+    
+    print(f"\nFiltering for {len(valid_syllables)} target classes: {valid_syllables}")
+    mask = data['label'].isin(valid_syllables)
+    data = data[mask]
+    
+    # Reload filtered data
+    X = data[feature_cols].values
+    y = data['label'].values
+    classes = np.unique(y)
+    
+    print(f"Total samples (filtered): {len(data)}")
     print(f"Total classes: {len(classes)}")
     print(f"Classes: {sorted(classes)}")
     
@@ -68,12 +86,34 @@ def train_unified_model(df, gender):
     if min_samples < 10:
         print(f"\nWARNING: Some classes have very few samples (min={min_samples})")
         # Filter out classes with too few samples
-        valid_classes = class_counts[class_counts >= 10].index.tolist()
-        mask = data['label'].isin(valid_classes)
+        valid_classes_by_count = class_counts[class_counts >= 10].index.tolist()
+        mask = data['label'].isin(valid_classes_by_count)
         data = data[mask]
         X = data[feature_cols].values
         y = data['label'].values
-        print(f"Filtered to {len(valid_classes)} classes with >= 10 samples")
+        print(f"Filtered to {len(valid_classes_by_count)} classes with >= 10 samples")
+    
+    # --- PROMPT: Subsampling to speed up training ---
+    # Determine max samples per class (e.g., 1000 or min of top classes, but here fixed for speed)
+    MAX_SAMPLES_PER_CLASS = 5000
+    
+    print(f"\nSubsampling: Limiting to max {MAX_SAMPLES_PER_CLASS} samples per class...")
+    subsampled_dfs = []
+    for cls in classes:
+        cls_data = data[data['label'] == cls]
+        if len(cls_data) > MAX_SAMPLES_PER_CLASS:
+            cls_data = cls_data.sample(n=MAX_SAMPLES_PER_CLASS, random_state=42)
+        subsampled_dfs.append(cls_data)
+    
+    data = pd.concat(subsampled_dfs)
+    # Shuffle
+    data = data.sample(frac=1, random_state=42).reset_index(drop=True)
+    
+    X = data[feature_cols].values
+    y = data['label'].values
+    
+    print(f"Total samples (subsampled): {len(data)}")
+    print(f"Class distribution (subsampled):\n{data['label'].value_counts().head(10).to_string()}")
     
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
