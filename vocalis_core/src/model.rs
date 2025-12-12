@@ -2,8 +2,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct VocalisModel {
-    pub model_male: GenderModel,
-    pub model_female: GenderModel,
+    // Existing vowel-only models (5 classes, 13 dims)
+    #[serde(alias = "model_male")]
+    pub vowel_male: Option<GenderModel>,
+    #[serde(alias = "model_female")]
+    pub vowel_female: Option<GenderModel>,
+    
+    // NEW: Unified models for vowels + syllables (25 classes, 39 dims)
+    pub unified_male: Option<GenderModel>,
+    pub unified_female: Option<GenderModel>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -26,15 +33,16 @@ pub struct SvmParams {
     pub support_vectors: Vec<Vec<f32>>,
     pub n_support: Vec<i32>,
     pub classes: Vec<String>,
-    #[serde(default)] // Allow missing for backward compatibility
-    pub probA: Vec<f32>,
-    #[serde(default)]
-    pub probB: Vec<f32>,
+    #[serde(default, rename = "probA")]
+    pub prob_a: Vec<f32>,
+    #[serde(default, rename = "probB")]
+    pub prob_b: Vec<f32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PredictionResult {
-    pub vowel: String,
+    pub vowel: String,       // Keeps name for backwards compatibility, but holds label
     pub gender: String,
     pub probabilities: Vec<(String, f32)>,
 }
+

@@ -111,7 +111,7 @@ impl Predictor {
         let n_sv = model.svm.support_vectors.len();
         
         // Check if we have probability parameters
-        let has_probs = !model.svm.probA.is_empty() && !model.svm.probB.is_empty();
+        let has_probs = !model.svm.prob_a.is_empty() && !model.svm.prob_b.is_empty();
 
         // 1. Pre-calculate Kernel values
         let mut k_values = Vec::with_capacity(n_sv);
@@ -163,8 +163,8 @@ impl Predictor {
 
                 // Probability (Platt Scaling)
                 if has_probs {
-                    let a = model.svm.probA[pair_idx];
-                    let b = model.svm.probB[pair_idx];
+                    let a = model.svm.prob_a[pair_idx];
+                    let b = model.svm.prob_b[pair_idx];
                     
                     // f = decision value. 
                     // Platt: P(y=i | f) = 1 / (1 + exp(A*f + B))
@@ -211,6 +211,7 @@ impl Predictor {
     }
 
     /// Backwards compatible predict (just takes usage of predict_proba winner)
+    #[allow(dead_code)]
     pub fn predict(features: &[f32], model: &GenderModel) -> String {
         let results = Self::predict_proba(features, model);
         if let Some((first_label, _)) = results.first() {

@@ -19,7 +19,7 @@ macro_rules! log {
         #[cfg(target_arch = "wasm32")]
         web_sys::console::log_1(&format!($($t)*).into());
         #[cfg(not(target_arch = "wasm32"))]
-        println!($($t)*);
+        println!($($t)*)
     }
 }
 
@@ -38,15 +38,76 @@ pub fn init_vocalis_internal() -> Result<(), String> {
     Ok(())
 }
 
+/// NEW: Predict using unified model (25 classes: vowels + syllables)
+/// Uses 39-dimensional feature vector (onset + transition + nucleus MFCCs)
+pub fn predict_unified_internal(audio_data: &[f32], sample_rate: f32) -> Result<String, String> {
+    let model = MODEL.get().ok_or("Model not initialized. Call init_vocalis() first.")?;
+    
+    // Check if unified models are available
+    let (unified_male, unified_female) = match (&model.unified_male, &model.unified_female) {
+        (Some(m), Some(f)) => (m, f),
+        _ => return Err("Unified models not available in JSON. Re-export with unified models.".to_string()),
+    };
+    
+    // Initialize DSP Processor with 13 MFCCs (will be used 3x for 39 total)
+    let dsp_processor = DspProcessor::new(sample_rate as u32, 13);
+    let pre_emphasis_coeff = 0.0;
+    
+    // Extract 39-dim syllable features (onset + transition + nucleus)
+    let syllable_features = dsp_processor.extract_syllable_features(audio_data, pre_emphasis_coeff);
+    
+    log!("Syllable features (39 dims): [{:.2}, {:.2}, {:.2} ... {:.2}, {:.2}, {:.2}]", 
+         syllable_features[0], syllable_features[1], syllable_features[2],
+         syllable_features[36], syllable_features[37], syllable_features[38]);
+    
+    // Detect gender using pitch (same logic as before)
+    let f0 = dsp_processor.compute_pitch(audio_data);
+    let is_male = f0 <= 178.7;
+    
+    log!("Detected F0: {:.2} Hz -> {}", f0, if is_male { "Male" } else { "Female" });
+    
+    // Select appropriate unified model based on gender
+    let svm_model = if is_male { unified_male } else { unified_female };
+    
+    // Run SVM inference
+    let probabilities = inference::Predictor::predict_proba(&syllable_features, svm_model);
+    
+    // Get top prediction
+    let label = probabilities.first()
+        .map(|(l, _)| l.clone())
+        .unwrap_or_else(|| "Unknown".to_string());
+    
+    let gender_str = if is_male { "Masculino" } else { "Femenino" };
+    
+    let result = PredictionResult {
+        vowel: label,  // Holds vowel OR syllable (e.g., "a" or "pa")
+        gender: gender_str.to_string(),
+        probabilities: probabilities,
+    };
+    
+    serde_json::to_string(&result)
+        .map_err(|e| format!("Error serializing prediction result: {}", e))
+}
+
+/// Legacy: Predict vowels only (5 classes, 13 dims)
+/// Kept for backwards compatibility
 pub fn predict_vowel_internal(audio_data: &[f32], sample_rate: f32) -> Result<String, String> {
     let model = MODEL.get().ok_or("Model not initialized. Call init_vocalis() first.")?;
     
-    // Initialize DSP Processor
-    let dsp_processor = DspProcessor::new(sample_rate as u32, model.model_male.svm.support_vectors[0].len());
-    let pre_emphasis_coeff = 0.0; // Disabled to match Python librosa features
-
-    // --- DEBUG SILENCIADO PARA RELEASE/TEST ---
+    // Try to use legacy vowel models, fall back to unified if not available
+    let (vowel_male, vowel_female) = match (&model.vowel_male, &model.vowel_female) {
+        (Some(m), Some(f)) => (m, f),
+        _ => {
+            // Fall back to unified model if vowel-only not available
+            log!("Vowel-only models not found, using unified model");
+            return predict_unified_internal(audio_data, sample_rate);
+        }
+    };
     
+    // Initialize DSP Processor
+    let dsp_processor = DspProcessor::new(sample_rate as u32, vowel_male.svm.support_vectors[0].len());
+    let pre_emphasis_coeff = 0.0;
+
     let mut all_mfccs: Vec<Vec<f32>> = Vec::new();
 
     // Frame the audio and extract features
@@ -67,9 +128,6 @@ pub fn predict_vowel_internal(audio_data: &[f32], sample_rate: f32) -> Result<St
         return Err("No valid audio frames to process.".to_string());
     }
 
-    // Debug: Log Raw MFCCs of first frame (solo si es muy necesario)
-    // log!("RAW MFCCs (First Frame): {:?}", &all_mfccs[0]);
-
     // Bag-of-Frames: Average MFCCs across all frames
     let mut averaged_mfccs = vec![0.0f32; dsp_processor.n_mfcc];
     for mfcc_vec in &all_mfccs {
@@ -81,30 +139,23 @@ pub fn predict_vowel_internal(audio_data: &[f32], sample_rate: f32) -> Result<St
         *mfcc_val /= all_mfccs.len() as f32;
     }
     
-    // 1. DSP: Extraer Features (MFCC + Pitch)
+    // DSP: Extract Pitch
     let f0 = dsp_processor.compute_pitch(audio_data);
     
     log!("Detected F0: {:.2} Hz", f0);
     log!("Averaged MFCCs (first 5): {:?}", &averaged_mfccs[0..5]);
 
-    // Replace the simulated MFCCs with the averaged ones
     let mfccs_for_prediction = averaged_mfccs; 
     
-    // 2. Clasificación de Género (Regla DSP simple)
+    // Gender classification
     let is_male = f0 <= 178.7;
-    let gender_char = if is_male { "M" } else { "F" };
     
-    // 3. Selección de Modelo SVM
-    let svm_model = if is_male {
-        &model.model_male
-    } else {
-        &model.model_female
-    };
+    // Select SVM model
+    let svm_model = if is_male { vowel_male } else { vowel_female };
     
-    // 4. Inferencia SVM (Probabilística)
+    // SVM Inference
     let probabilities = inference::Predictor::predict_proba(&mfccs_for_prediction, svm_model);
     
-    // El ganador es el primero (ya está ordenado)
     let vowel = probabilities.first()
         .map(|(label, _)| label.clone())
         .unwrap_or_else(|| "Unknown".to_string());
@@ -113,7 +164,7 @@ pub fn predict_vowel_internal(audio_data: &[f32], sample_rate: f32) -> Result<St
 
     let result = PredictionResult {
         vowel: vowel,
-        gender: gender_str.to_string(), // Removed "(DSP)" and used full word
+        gender: gender_str.to_string(),
         probabilities: probabilities,
     };
 
@@ -132,7 +183,14 @@ pub fn init_vocalis() -> Result<(), JsValue> {
     init_vocalis_internal().map_err(|e| JsValue::from_str(&e))
 }
 
+/// Legacy vowel prediction (5 classes)
 #[wasm_bindgen]
 pub fn predict_vowel(audio_data: &[f32], sample_rate: f32) -> Result<String, JsValue> {
     predict_vowel_internal(audio_data, sample_rate).map_err(|e| JsValue::from_str(&e))
+}
+
+/// NEW: Unified prediction (25 classes: vowels + syllables)
+#[wasm_bindgen]
+pub fn predict_unified(audio_data: &[f32], sample_rate: f32) -> Result<String, JsValue> {
+    predict_unified_internal(audio_data, sample_rate).map_err(|e| JsValue::from_str(&e))
 }
