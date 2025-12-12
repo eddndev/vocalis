@@ -13,10 +13,10 @@ from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from feature_extractor import get_syllable_features, get_pitch_for_gender
 
-# Configuration
-SYLLABLE_DATASET_DIR = "research/dsp_lab/syllable_dataset/audio"
-METADATA_FILE = "research/dsp_lab/syllable_dataset/metadata.csv"
-OUTPUT_CSV = "research/dsp_lab/syllable_features.csv"
+# Configuration - Paths relative to research/ directory
+SYLLABLE_DATASET_DIR = "dsp_lab/syllable_dataset/audio"
+METADATA_FILE = "dsp_lab/syllable_dataset/metadata.csv"
+OUTPUT_CSV = "dsp_lab/syllable_features.csv"
 SAMPLE_RATE = 16000
 
 # Batch size for parallel processing

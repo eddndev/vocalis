@@ -13,12 +13,12 @@ import librosa
 import soundfile as sf
 from tqdm import tqdm
 
-# Configuration
-DATA_ROOT = "research/data"
-OUTPUT_DIR = "research/dsp_lab/syllable_dataset"
+# Configuration - Paths relative to research/ directory
+DATA_ROOT = "data"
+OUTPUT_DIR = "dsp_lab/syllable_dataset"
 OUTPUT_AUDIO_DIR = os.path.join(OUTPUT_DIR, "audio")
 METADATA_FILE = os.path.join(OUTPUT_DIR, "metadata.csv")
-SPEAKERS_JSON = "research/train_lab/speakers.json"
+SPEAKERS_JSON = "train_lab/speakers.json"
 SAMPLE_RATE = 16000
 
 # Target consonants for syllable families (p, t, m, s)
