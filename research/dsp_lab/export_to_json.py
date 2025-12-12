@@ -3,8 +3,9 @@ import json
 import numpy as np
 import os
 
-MODEL_DIR = "research/dsp_lab/models"
-OUTPUT_JSON = "research/dsp_lab/models/vocalis_model.json"
+# Paths relative to research/ directory
+MODEL_DIR = "dsp_lab/models"
+OUTPUT_JSON = "dsp_lab/models/vocalis_model.json"
 
 def extract_svm_params(pipeline):
     """
