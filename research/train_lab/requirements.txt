@@ -1,9 +1,0 @@
-numpy
-pandas
-scipy
-librosa
-praat-parselmouth
-torch
-torchaudio
-onnx
-soundfile

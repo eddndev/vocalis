@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 description = "High-performance DSP engine for Vocalis, compiled to WebAssembly."
 authors = ["Eduardo Alonso"]
+repository = "https://github.com/eddndev/vocalis"
+license = "GPL-3.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

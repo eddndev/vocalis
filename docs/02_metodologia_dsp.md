@@ -44,3 +44,28 @@ Para resolver esto, implementamos una estrategia "Divide y Vencerás":
 *   **Robustez:** La Estandarización Global asegura que la señal nunca se anule, incluso en grabaciones perfectamente estacionarias, solucionando el problema de "vectores cero".
 *   **Precisión:** Los modelos especializados por género tienen fronteras de decisión más simples y precisas.
 *   **Eficiencia:** El clasificador SVM final es simplemente un cálculo de distancias contra vectores de soporte, extremadamente rápido en tiempo de inferencia.
+
+## 2.4. Interpretación Visual y Justificación Determinística
+
+Para trascender la "caja negra" de la probabilidad y ofrecer una **justificación determinística** al usuario, se introducen las Gráficas de Trayectorias MFCC.
+
+### 2.4.1. Estructura de la Gráfica
+Visualizamos el vector de características de 39 dimensiones no como un espectro de frecuencias (Hz), sino como una **"Firma Acústica"** dividida en 3 zonas temporales:
+
+| Zona | Índices | Descripción | Interpretación |
+|:---:|:---:|:---|:---|
+| **Ataque (Onset)** | 0-12 | Inicio del sonido (35%) | Identidad de la Consonante. <br>• **Ruido/Caos:** Fricativas ('S'). <br>• **Suave/Resonante:** Nasales ('M') o Vocales puras. |
+| **Transición** | 13-25 | Cuerpo medio (15%) | Coarticulación (Movimiento de la boca hacia la vocal). |
+| **Núcleo (Nucleus)** | 26-38 | Final estable (50%) | Identidad de la Vocal ('A' vs 'I'). |
+
+### 2.4.2. ¿Por qué MFCC y no Espectrograma?
+*   **Espectrograma:** Muestra el *tono* absoluto. Varía si el usuario tiene voz aguda o grave, lo cual es indeseable para reconocer fonemas.
+*   **MFCC (Cepstrum):** Muestra la **forma del tracto vocal**. Separa la fuente (cuerdas vocales) del filtro (boca), permitiendo evaluar la *pronunciación* independientemente del *tono*.
+
+### 2.4.3. Criterio de Aceptación Visual
+Se establece una "Zona de Confianza" basada en la estadística de miles de muestras:
+*   **Línea Azul:** Promedio ideal del fonema.
+*   **Área Sombreada:** $\pm 1$ Desviación Estándar.
+
+**Regla de Justificación:** Si la trayectoria del usuario sale del área sombreada en una zona crítica (ej. zona de Ataque para 'S'), se justifica el rechazo por "Falla en articulación inicial", independientemente de la probabilidad del modelo.
+

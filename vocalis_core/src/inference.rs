@@ -11,7 +11,18 @@ impl Predictor {
         // Al forzar C0 = media, anulamos su efecto en el SVM.
         let mut feats = features.to_vec();
         if !feats.is_empty() && !model.scaler.mean.is_empty() {
+             // Neutralize C0 (Energy) for Onset
             feats[0] = model.scaler.mean[0];
+            
+            // Neutralize C0 (Energy) for Transition (Index 13)
+            if feats.len() > 13 && model.scaler.mean.len() > 13 {
+                feats[13] = model.scaler.mean[13];
+            }
+            
+            // Neutralize C0 (Energy) for Nucleus (Index 26)
+            if feats.len() > 26 && model.scaler.mean.len() > 26 {
+                feats[26] = model.scaler.mean[26];
+            }
         }
 
         feats.iter()
@@ -111,7 +122,7 @@ impl Predictor {
         let n_sv = model.svm.support_vectors.len();
         
         // Check if we have probability parameters
-        let has_probs = !model.svm.probA.is_empty() && !model.svm.probB.is_empty();
+        let has_probs = !model.svm.prob_a.is_empty() && !model.svm.prob_b.is_empty();
 
         // 1. Pre-calculate Kernel values
         let mut k_values = Vec::with_capacity(n_sv);
@@ -163,8 +174,8 @@ impl Predictor {
 
                 // Probability (Platt Scaling)
                 if has_probs {
-                    let a = model.svm.probA[pair_idx];
-                    let b = model.svm.probB[pair_idx];
+                    let a = model.svm.prob_a[pair_idx];
+                    let b = model.svm.prob_b[pair_idx];
                     
                     // f = decision value. 
                     // Platt: P(y=i | f) = 1 / (1 + exp(A*f + B))
@@ -211,6 +222,7 @@ impl Predictor {
     }
 
     /// Backwards compatible predict (just takes usage of predict_proba winner)
+    #[allow(dead_code)]
     pub fn predict(features: &[f32], model: &GenderModel) -> String {
         let results = Self::predict_proba(features, model);
         if let Some((first_label, _)) = results.first() {
