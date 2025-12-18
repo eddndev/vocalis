@@ -149,8 +149,11 @@ impl DspProcessor {
     pub fn dct(&self, log_mel_energies: &[f32]) -> Vec<f32> {
         let mut mfccs = vec![0.0; self.n_mfcc];
         let num_filters = log_mel_energies.len();
+        
+        // Orthonormal normalization (matches scipy.fftpack.dct with norm='ortho')
+        // This is CRITICAL for matching librosa.feature.mfcc() output
         let sqrt_2_n = (2.0 / num_filters as f32).sqrt();
-        let sqrt_1_n = (1.0 / num_filters as f32).sqrt();
+        let sqrt_1_2n = (0.5 / num_filters as f32).sqrt();
 
         for i in 0..self.n_mfcc {
             let mut sum = 0.0;
@@ -158,10 +161,11 @@ impl DspProcessor {
                 sum += log_mel_energies[j] * ((PI * i as f32 / num_filters as f32) * (j as f32 + 0.5)).cos();
             }
             
+            // Apply orthonormal scaling
             if i == 0 {
-                mfccs[i] = sum * sqrt_1_n;
+                mfccs[i] = sum * sqrt_1_2n;  // First coefficient: sqrt(1/(2N))
             } else {
-                mfccs[i] = sum * sqrt_2_n;
+                mfccs[i] = sum * sqrt_2_n;   // Rest: sqrt(2/N)
             }
         }
         mfccs

@@ -6,30 +6,27 @@ impl Predictor {
     /// Aplica la normalización (StandardScaler) al vector de entrada
     /// x_scaled = (x - mean) / scale
     pub fn normalize(features: &[f32], model: &GenderModel) -> Vec<f32> {
-        // HACK: Neutralizar C0 (Energía/Volumen)
-        // El volumen del navegador puede variar mucho respecto al entrenamiento.
-        // Al forzar C0 = media, anulamos su efecto en el SVM.
-        let mut feats = features.to_vec();
-        if !feats.is_empty() && !model.scaler.mean.is_empty() {
-             // Neutralize C0 (Energy) for Onset
-            feats[0] = model.scaler.mean[0];
-            
-            // Neutralize C0 (Energy) for Transition (Index 13)
-            if feats.len() > 13 && model.scaler.mean.len() > 13 {
-                feats[13] = model.scaler.mean[13];
-            }
-            
-            // Neutralize C0 (Energy) for Nucleus (Index 26)
-            if feats.len() > 26 && model.scaler.mean.len() > 26 {
-                feats[26] = model.scaler.mean[26];
-            }
-        }
-
-        feats.iter()
+        // CRITICAL: Apply StandardScaler FIRST
+        let scaled: Vec<f32> = features.iter()
             .zip(model.scaler.mean.iter())
             .zip(model.scaler.scale.iter())
             .map(|((&x, &m), &s)| (x - m) / s)
-            .collect()
+            .collect();
+        
+        // THEN neutralize C0 (Energy/Volume) on the SCALED vector
+        // This matches the Python pipeline order
+        let mut result = scaled;
+        if !result.is_empty() {
+            result[0] = 0.0;  // C0 after scaling becomes 0
+            if result.len() > 13 {
+                result[13] = 0.0;  // Transition C0
+            }
+            if result.len() > 26 {
+                result[26] = 0.0;  // Nucleus C0
+            }
+        }
+        
+        result
     }
 
     /// Kernel RBF (Radial Basis Function)

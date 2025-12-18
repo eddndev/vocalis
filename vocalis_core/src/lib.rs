@@ -56,9 +56,12 @@ pub fn predict_unified_internal(audio_data: &[f32], sample_rate: f32) -> Result<
     // Extract 39-dim syllable features (onset + transition + nucleus)
     let syllable_features = dsp_processor.extract_syllable_features(audio_data, pre_emphasis_coeff);
     
-    log!("Syllable features (39 dims): [{:.2}, {:.2}, {:.2} ... {:.2}, {:.2}, {:.2}]", 
-         syllable_features[0], syllable_features[1], syllable_features[2],
-         syllable_features[36], syllable_features[37], syllable_features[38]);
+    // DETAILED LOGGING: Print all 39 features for debugging
+    log!("=== FEATURE VECTOR (39 dims) ===");
+    for (i, &val) in syllable_features.iter().enumerate() {
+        log!("  Feature[{}]: {:.6}", i, val);
+    }
+    log!("================================");
     
     // Detect gender using pitch (same logic as before)
     let f0 = dsp_processor.compute_pitch(audio_data);

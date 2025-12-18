@@ -406,8 +406,15 @@
         if (isRecording) return;
 
         try {
+            // Disable browser audio processing (filters) to get raw spectral data
+            // This prevents "thinning" of the audio (high pass) that confuses E with I
             const stream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false,
+                    channelCount: 1,
+                },
             });
             audioContext = new (
                 window.AudioContext || window.webkitAudioContext
@@ -500,6 +507,8 @@
     async function processAudioData(audioBuffer, targetRate) {
         let data;
         const originalRate = audioBuffer.sampleRate;
+
+        // Resample if needed
         if (originalRate !== targetRate) {
             const offlineCtx = new OfflineAudioContext(
                 1,
@@ -516,6 +525,57 @@
             data = audioBuffer.getChannelData(0);
         }
 
+        // CRITICAL FIX: Normalize audio RMS to match training data
+        // The browser mic records at very low volume compared to training data
+        // RMS Target 0.1 matches the training set average
+        const rms = Math.sqrt(
+            data.reduce((sum, x) => sum + x * x, 0) / data.length,
+        );
+        const targetRMS = 0.1;
+
+        if (rms > 0.001) {
+            let gain = targetRMS / rms;
+
+            // ANTI-CLIPPING PROTECTION:
+            // Check if gain would cause clipping (max value > 1.0)
+            let maxVal = 0;
+            for (let x of data) {
+                if (Math.abs(x) > maxVal) maxVal = Math.abs(x);
+            }
+
+            if (maxVal * gain > 0.99) {
+                const safeGain = 0.99 / maxVal;
+                console.log(
+                    `Clipping protection: Reducing gain ${gain.toFixed(2)}x -> ${safeGain.toFixed(2)}x`,
+                );
+                gain = safeGain;
+            } else {
+                console.log(
+                    `Audio RMS normalization: ${rms.toFixed(6)} -> ${targetRMS} (gain: ${gain.toFixed(2)}x)`,
+                );
+            }
+
+            data = data.map((x) => x * gain);
+        }
+
+        // SPECTRAL TILT CORRECTION (Low-Pass Filter)
+        // Problem: Mic is too "bright" (E -> I, U -> I).
+        // Solution: Mild smoothing to attenuate High Frequencies (>4kHz)
+        // Simple 3-point moving average: y[i] = 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1]
+        const smoothed = new Float32Array(data.length);
+        for (let i = 1; i < data.length - 1; i++) {
+            smoothed[i] =
+                0.25 * data[i - 1] + 0.5 * data[i] + 0.25 * data[i + 1];
+        }
+        // Handle edges
+        smoothed[0] = data[0];
+        smoothed[data.length - 1] = data[data.length - 1];
+        data = smoothed;
+        console.log(
+            "Applied mild Low-Pass filter (3-point smoothing) for spectral tilt correction.",
+        );
+
+        // Pre-emphasis commented out (model trained without it)
         // const alpha = 0.97;
         // const filtered = new Float32Array(data.length);
         // filtered[0] = data[0];
@@ -524,6 +584,7 @@
         // }
         // data = filtered;
 
+        // Trim or pad to expected length
         if (data.length > EXPECTED_AUDIO_LENGTH) {
             const scanWindow = Math.floor(targetRate * 0.05);
             let maxEnergy = 0;
@@ -551,6 +612,7 @@
             data = padded;
         }
 
+        // Peak normalization (existing, keep this)
         let maxVal = 0;
         for (let i = 0; i < data.length; i++)
             if (Math.abs(data[i]) > maxVal) maxVal = Math.abs(data[i]);
