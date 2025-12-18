@@ -44,5 +44,6 @@ pub struct PredictionResult {
     pub vowel: String,       // Keeps name for backwards compatibility, but holds label
     pub gender: String,
     pub probabilities: Vec<(String, f32)>,
+    pub features: Vec<f32>,
 }
 

@@ -26,7 +26,7 @@
                     </p>
                 </div>
 
-                <!-- Visualizer Container (No Border, No Grid Overlay) -->
+                <!-- Visualizer Container -->
                 <div
                     class="relative bg-black/5 h-64 md:h-80 group overflow-hidden"
                 >
@@ -75,54 +75,79 @@
 
             <!-- RIGHT COLUMN: Results & DSP Data -->
             <div
-                class="w-full lg:w-1/3 flex flex-col justify-between border-l-0 lg:border-l border-black/5 pl-0 lg:pl-12 pt-12 lg:pt-0"
+                class="w-full lg:w-1/2 flex flex-col border-l-0 lg:border-l border-black/5 pl-0 lg:pl-12 pt-12 lg:pt-0"
             >
                 <!-- Main Prediction -->
-                <div class="mb-12">
-                    <h3
-                        class="text-xs font-mono tracking-widest text-text-muted mb-4 uppercase"
-                    >
-                        Clase Primaria
-                    </h3>
-                    <div class="flex items-baseline gap-4">
-                        <div
-                            class="text-[8rem] leading-none font-display font-black text-black tracking-tighter"
-                            id="res-vowel"
+                <div class="mb-12 flex justify-between items-end">
+                    <div>
+                        <h3
+                            class="text-xs font-mono tracking-widest text-text-muted mb-4 uppercase"
                         >
-                            --
-                        </div>
-                        <div
-                            class="text-xl font-mono text-brand-primary border-2 border-brand-primary px-3 py-1 rounded-full"
-                            id="res-gender"
-                        >
-                            --
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Probabilities -->
-                <div class="space-y-6 flex-1">
-                    <h3
-                        class="text-xs font-mono tracking-widest text-text-muted uppercase border-b border-black/10 pb-2"
-                    >
-                        Matriz de Confianza
-                    </h3>
-                    <div id="prob-list" class="space-y-3">
-                        <!-- Bars injected by JS -->
-                        <div
-                            class="text-sm font-mono text-text-muted italic py-8"
-                        >
-                            Esperando flujo de audio...
+                            Clase Detectada
+                        </h3>
+                        <div class="flex items-baseline gap-4">
+                            <div
+                                class="text-[6rem] leading-none font-display font-black text-black tracking-tighter"
+                                id="res-vowel"
+                            >
+                                --
+                            </div>
+                            <div
+                                class="text-xl font-mono text-brand-primary border-2 border-brand-primary px-3 py-1 rounded-full"
+                                id="res-gender"
+                            >
+                                --
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Footer Tech Info -->
-                <div
-                    class="mt-12 pt-6 border-t border-black/10 text-xs font-mono text-text-muted space-y-1 opacity-50"
-                >
-                    <div>MODE: WASM/SIMD</div>
-                    <div>DSP: FFT-2048 / MFCC-40</div>
+                <!-- NEW: DSP Analysis Chart -->
+                <div class="flex-1">
+                    <div
+                        class="flex justify-between items-end mb-4 border-b border-black/10 pb-2"
+                    >
+                        <h3
+                            class="text-xs font-mono tracking-widest text-text-muted uppercase"
+                        >
+                            Análisis Determinístico (MFCC)
+                        </h3>
+                        <div
+                            class="text-[10px] font-mono text-right text-text-muted opacity-60"
+                        >
+                            <div>0-12: Ataque</div>
+                            <div>13-25: Transición</div>
+                            <div>26-38: Núcleo</div>
+                        </div>
+                    </div>
+
+                    <div class="relative h-64 w-full bg-white">
+                        <canvas id="dsp-chart"></canvas>
+
+                        <!-- Watermark/Placeholder -->
+                        <div
+                            id="dsp-placeholder"
+                            class="absolute inset-0 flex items-center justify-center text-text-muted font-mono text-sm opacity-50 z-0 pointer-events-none"
+                        >
+                            Esperando datos de voz...
+                        </div>
+                    </div>
+
+                    <p
+                        class="mt-4 text-xs font-mono text-text-muted leading-relaxed"
+                    >
+                        <span class="font-bold text-brand-primary"
+                            >COMO LEER:</span
+                        >
+                        La línea <span class="text-brand-primary font-bold"
+                            >PÚRPURA</span
+                        > representa tu voz. Debe mantenerse dentro de la zona <span
+                            class="bg-blue-100 text-blue-800 px-1 rounded"
+                            >AZUL</span
+                        >
+                        para una pronunciación correcta. Desviaciones indican errores
+                        en articulación (Ataque) o vocalización (Núcleo).
+                    </p>
                 </div>
             </div>
         </div>
@@ -134,10 +159,11 @@
         init_vocalis,
         predict_unified,
     } from "../../lib/pkg/vocalis_core.js";
+    import Chart from "chart.js/auto";
 
     // --- CONFIG ---
     const EXPECTED_SAMPLE_RATE = 16000;
-    const RECORDING_DURATION_MS = 1000; // 1 segundo es suficiente y más rápido
+    const RECORDING_DURATION_MS = 1000;
     const EXPECTED_AUDIO_LENGTH =
         EXPECTED_SAMPLE_RATE * (RECORDING_DURATION_MS / 1000);
 
@@ -149,6 +175,10 @@
     let isRecording = false;
     let visualizerFrameId;
 
+    // DSP Data
+    let referenceData = null;
+    let dspChart = null;
+
     // --- DOM ---
     const canvas = document.getElementById("visualizer");
     const canvasCtx = canvas.getContext("2d");
@@ -157,16 +187,27 @@
     const recDot = document.getElementById("rec-dot");
     const statusBadge = document.getElementById("status-badge");
     const statusText = document.getElementById("status-text");
-    const resVowel = document.getElementById("res-vowel"); // Maintains ID but will hold syllables too
+    const resVowel = document.getElementById("res-vowel");
     const resGender = document.getElementById("res-gender");
-    const probList = document.getElementById("prob-list");
+    const dspPlaceholder = document.getElementById("dsp-placeholder");
 
     // --- INIT ---
     async function initialize() {
         try {
-            statusText.textContent = "Cargando Módulo WASM...";
-            await init();
-            init_vocalis();
+            statusText.textContent = "Cargando motor y datos de referencia...";
+
+            // Parallel load: WASM and JSON
+            const [_, refData] = await Promise.all([
+                init().then(() => init_vocalis()),
+                fetch("/reference_data.json").then((res) => res.json()),
+            ]);
+
+            referenceData = refData;
+            console.log(
+                "Reference Data Loaded:",
+                Object.keys(referenceData).length,
+                "classes",
+            );
 
             statusText.textContent = "Motor Listo.";
             statusBadge.textContent = "INACTIVO";
@@ -175,16 +216,147 @@
 
             btnRecord.disabled = false;
 
-            // Resize canvas
+            // Resize canvas & Init Chart
             resizeCanvas();
             window.addEventListener("resize", resizeCanvas);
+            initDspChart();
         } catch (e) {
             console.error(e);
-            statusText.textContent = "Error cargando Motor.";
+            statusText.textContent = "Error cargando sistema.";
             statusBadge.textContent = "ERROR";
             statusBadge.className =
                 "absolute top-0 left-0 bg-red-600 text-white px-4 py-2 font-mono text-xs tracking-widest uppercase font-bold";
         }
+    }
+
+    function initDspChart() {
+        const ctx = document.getElementById("dsp-chart").getContext("2d");
+
+        // Initial empty data
+        const labels = Array.from({ length: 39 }, (_, i) => i);
+
+        dspChart = new Chart(ctx, {
+            type: "line",
+            data: {
+                labels: labels,
+                datasets: [
+                    // Dataset 0: User Input (Your Voice)
+                    {
+                        label: "Tu Voz",
+                        data: [],
+                        borderColor: "#8b5cf6", // Brand Primary (Purple)
+                        borderWidth: 3,
+                        pointBackgroundColor: "#fff",
+                        pointBorderColor: "#8b5cf6",
+                        pointRadius: 2,
+                        tension: 0.3, // Smooth curve
+                        zIndex: 10,
+                    },
+                    // Dataset 1: Reference Mean (Target)
+                    {
+                        label: "Referencia Ideal",
+                        data: [],
+                        borderColor: "#3b82f6", // Blue-500
+                        borderDash: [5, 5],
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.3,
+                        alpha: 0.8,
+                    },
+                    // Dataset 2: Reference Upper Bound (Hidden line for fill)
+                    {
+                        label: "Upper",
+                        data: [],
+                        borderColor: "transparent",
+                        pointRadius: 0,
+                        fill: false,
+                        tension: 0.3,
+                    },
+                    // Dataset 3: Reference Lower Bound (Fills to Upper)
+                    {
+                        label: "Zona de Aceptación",
+                        data: [],
+                        borderColor: "transparent",
+                        backgroundColor: "rgba(59, 130, 246, 0.15)", // Blue with opacity
+                        pointRadius: 0,
+                        fill: "-1", // Fill to previous dataset (Upper)
+                        tension: 0.3,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: "top",
+                        labels: {
+                            usePointStyle: true,
+                            font: { family: "monospace" },
+                        },
+                        filter: function (item, chart) {
+                            // Hide helper datasets from legend
+                            return !["Upper"].includes(item.text);
+                        },
+                    },
+                    tooltip: {
+                        mode: "index",
+                        intersect: false,
+                    },
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            color: (context) => {
+                                if (
+                                    context.tick.value === 12.5 ||
+                                    context.tick.value === 25.5
+                                ) {
+                                    return "rgba(0,0,0,0.2)"; // Zonar separators
+                                }
+                                return "transparent";
+                            },
+                        },
+                        ticks: { display: false }, // Hide numbers for cleaner look
+                    },
+                    y: {
+                        display: false, // Hide Y axis values
+                    },
+                },
+                layout: {
+                    padding: { left: 10, right: 10, top: 10, bottom: 10 },
+                },
+            },
+        });
+    }
+
+    function updateDspChart(userFeatures, predictedLabel, predictedGender) {
+        if (!dspChart || !referenceData) return;
+
+        dspPlaceholder.style.display = "none";
+
+        // Construct key for lookup (e.g., "sa_M")
+        const genderKey = predictedGender === "Masculino" ? "M" : "F";
+        const key = `${predictedLabel}_${genderKey}`;
+        const ref = referenceData[key];
+
+        if (!ref) {
+            console.warn(`No reference data for ${key}`);
+            return;
+        }
+
+        // Calculate Upper/Lower bounds (Mean +/- 1 StdDev)
+        const upper = ref.mean.map((m, i) => m + ref.std[i]);
+        const lower = ref.mean.map((m, i) => m - ref.std[i]);
+
+        // Update Data
+        dspChart.data.datasets[0].data = userFeatures;
+        dspChart.data.datasets[1].data = ref.mean;
+        dspChart.data.datasets[2].data = upper;
+        dspChart.data.datasets[3].data = lower;
+
+        dspChart.update();
     }
 
     function resizeCanvas() {
@@ -203,7 +375,6 @@
         const dataArray = new Uint8Array(bufferLength);
         analyser.getByteFrequencyData(dataArray);
 
-        // Light Mode: Clear to transparent (white/gray bg behind)
         canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
 
         const barWidth = (canvas.width / bufferLength) * 2.5;
@@ -212,14 +383,9 @@
 
         for (let i = 0; i < bufferLength; i++) {
             barHeight = dataArray[i];
-
-            // Konpo Light Style: Dark bars with cyan/purple accents
             const alpha = barHeight / 255;
-
-            // Base: Very dark gray/black
             canvasCtx.fillStyle = `rgba(24, 24, 27, ${alpha})`;
 
-            // High energy: Brand Primary (Purple)
             if (barHeight > 160) {
                 canvasCtx.fillStyle = `rgba(139, 92, 246, ${alpha})`;
             }
@@ -243,10 +409,10 @@
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: true,
             });
-            audioContext = new (window.AudioContext ||
-                window.webkitAudioContext)();
+            audioContext = new (
+                window.AudioContext || window.webkitAudioContext
+            )();
 
-            // Visualizer Setup
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 2048;
             const source = audioContext.createMediaStreamSource(stream);
@@ -260,8 +426,7 @@
 
             mediaRecorder.onstop = async () => {
                 cancelAnimationFrame(visualizerFrameId);
-                // Clear canvas
-                canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+                // canvasCtx.clearRect(0, 0, canvas.width, canvas.height); // Persist graph
 
                 statusText.textContent = "Procesando Señal...";
                 statusBadge.textContent = "PROCESANDO";
@@ -273,7 +438,6 @@
                 });
                 await processAndPredict(audioBlob);
 
-                // Cleanup
                 stream.getTracks().forEach((t) => t.stop());
                 resetUIState();
             };
@@ -281,7 +445,6 @@
             mediaRecorder.start();
             setRecordingState(true);
 
-            // Auto stop
             setTimeout(() => {
                 if (mediaRecorder && mediaRecorder.state === "recording") {
                     mediaRecorder.stop();
@@ -315,14 +478,15 @@
     }
 
     async function processAndPredict(blob) {
-        // ... (Same DSP Logic) ...
         const arrayBuffer = await blob.arrayBuffer();
         const decoded = await audioContext.decodeAudioData(arrayBuffer);
         const data = await processAudioData(decoded, EXPECTED_SAMPLE_RATE);
 
         try {
-            // Use NEW unified prediction (25 classes)
-            const resultJson = await predict_unified(data, EXPECTED_SAMPLE_RATE);
+            const resultJson = await predict_unified(
+                data,
+                EXPECTED_SAMPLE_RATE,
+            );
             const result = JSON.parse(resultJson);
             renderResults(result);
             statusText.textContent = "Análisis Completo.";
@@ -332,9 +496,8 @@
         }
     }
 
-    // --- DSP HELPER (Ported) ---
+    // --- DSP HELPER ---
     async function processAudioData(audioBuffer, targetRate) {
-        // Reuse logic from web_client/src/main.js
         let data;
         const originalRate = audioBuffer.sampleRate;
         if (originalRate !== targetRate) {
@@ -411,41 +574,13 @@
         resVowel.textContent = prediction.vowel;
         resGender.textContent = prediction.gender;
 
-        probList.innerHTML = "";
-
-        if (prediction.probabilities) {
-            prediction.probabilities.forEach(([label, score]) => {
-                const percent = (score * 100).toFixed(0);
-
-                // Light Mode Bars
-                const row = document.createElement("div");
-                row.className = "flex items-center gap-4 group";
-
-                const widthStyle = `width: ${percent}%;`;
-                const isWinner = score > 0.8;
-                const barColorClass = isWinner
-                    ? "bg-brand-primary"
-                    : score > 0.4
-                      ? "bg-brand-secondary"
-                      : "bg-gray-300";
-                const textColorClass = isWinner
-                    ? "text-black font-bold"
-                    : "text-gray-400 font-normal";
-
-                row.innerHTML = `
-                    <span class="w-8 font-display text-lg ${textColorClass}">${label}</span>
-                    
-                    <div class="flex-1 h-8 bg-gray-100 relative overflow-hidden">
-                        <!-- Fill -->
-                        <div class="h-full transition-all duration-500 ease-out ${barColorClass}" 
-                             style="${widthStyle}">
-                        </div>
-                    </div>
-                    
-                    <span class="w-12 text-right text-sm font-mono text-text-muted">${percent}%</span>
-                `;
-                probList.appendChild(row);
-            });
+        // Update Chart
+        if (prediction.features) {
+            updateDspChart(
+                prediction.features,
+                prediction.vowel,
+                prediction.gender,
+            );
         }
     }
 

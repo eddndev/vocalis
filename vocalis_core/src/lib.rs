@@ -83,6 +83,7 @@ pub fn predict_unified_internal(audio_data: &[f32], sample_rate: f32) -> Result<
         vowel: label,  // Holds vowel OR syllable (e.g., "a" or "pa")
         gender: gender_str.to_string(),
         probabilities: probabilities,
+        features: syllable_features,
     };
     
     serde_json::to_string(&result)
@@ -166,6 +167,7 @@ pub fn predict_vowel_internal(audio_data: &[f32], sample_rate: f32) -> Result<St
         vowel: vowel,
         gender: gender_str.to_string(),
         probabilities: probabilities,
+        features: mfccs_for_prediction,
     };
 
     serde_json::to_string(&result)

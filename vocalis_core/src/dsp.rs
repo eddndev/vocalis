@@ -367,8 +367,8 @@ impl DspProcessor {
              return audio.to_vec(); // Fallback to full audio if detection questionable
         }
 
-        // Add small padding (e.g. 50ms = ~800 samples)
-        let padding = 800;
+        // Add small padding (e.g. 10ms = ~160 samples at 16k)
+        let padding = 160;
         let start_padded = start.saturating_sub(padding).max(0);
         let end_padded = (end + padding).min(audio.len());
 
