@@ -270,20 +270,47 @@ impl DspProcessor {
     /// - Nucleus (50%): Captures the vowel
     /// 
     /// Each region gets 13 MFCCs (averaged over time), resulting in 39 total features.
+    /// Extract 39-dimensional feature vector for syllable classification.
+    /// 
+    /// Segments the audio into 3 temporal regions:
+    /// - Onset (35%): Captures consonant characteristics
+    /// - Transition (15%): Captures coarticulation
+    /// - Nucleus (50%): Captures the vowel
+    /// 
+    /// Each region gets 13 MFCCs (averaged over time), resulting in 39 total features.
     pub fn extract_syllable_features(&self, audio_data: &[f32], pre_emphasis_coeff: f32) -> Vec<f32> {
-        let total_samples = audio_data.len();
+        // --- CRITICAL FIX: Trim Silence ---
+        // Real-time audio contains silence before/after the syllable.
+        // We must isolate the vocal region to align with training data.
+        let trimmed_audio = self.trim_silence(audio_data, 0.02, 200); // 2% max energy threshold
+        
+        // Use trimmed audio, or fallback to original if trimming failed/returned empty
+        let active_audio = if !trimmed_audio.is_empty() {
+            &trimmed_audio
+        } else {
+            audio_data
+        };
+
+        let total_samples = active_audio.len();
         
         // Ensure minimum length
         if total_samples < self.frame_length * 3 {
-            // Pad audio if too short
-            let mut padded = audio_data.to_vec();
-            padded.resize(self.frame_length * 3, 0.0);
-            return self.extract_syllable_features(&padded, pre_emphasis_coeff);
+             // If active region is too short, just replicate/pad it
+             let mut padded = active_audio.to_vec();
+             padded.resize(self.frame_length * 3, 0.0);
+             return self.extract_syllable_features_raw(&padded, pre_emphasis_coeff);
         }
+        
+        self.extract_syllable_features_raw(active_audio, pre_emphasis_coeff)
+    }
+
+    /// Internal method to extract features from already trimmed audio
+    fn extract_syllable_features_raw(&self, audio_data: &[f32], pre_emphasis_coeff: f32) -> Vec<f32> {
+        let total_samples = audio_data.len();
         
         // Calculate split points (35% / 15% / 50%)
         let onset_end = (total_samples as f32 * 0.35) as usize;
-        let trans_end = (total_samples as f32 * 0.50) as usize;
+        let trans_end = (total_samples as f32 * 0.50) as usize; // onset + trans (0.35 + 0.15 = 0.50)
         
         // Split audio into 3 regions
         let onset_audio = &audio_data[..onset_end];
@@ -302,6 +329,50 @@ impl DspProcessor {
         features.extend_from_slice(&mfcc_nucleus);
         
         features
+    }
+
+    /// Find active speech region based on energy
+    /// threshold_ratio: fraction of max energy to consider "active" (e.g. 0.05)
+    fn trim_silence(&self, audio: &[f32], threshold_ratio: f32, min_active_samples: usize) -> Vec<f32> {
+        if audio.is_empty() { return Vec::new(); }
+
+        let mut max_val = 0.0;
+        for &x in audio {
+            if x.abs() > max_val { max_val = x.abs(); }
+        }
+
+        if max_val < 0.001 { return audio.to_vec(); } // Too quiet, return distinct
+
+        let threshold = max_val * threshold_ratio;
+        let mut start = 0;
+        let mut end = audio.len();
+
+        // Find Start
+        for (i, &x) in audio.iter().enumerate() {
+            if x.abs() > threshold {
+                start = i;
+                break;
+            }
+        }
+
+        // Find End
+        for (i, &x) in audio.iter().enumerate().rev() {
+            if x.abs() > threshold {
+                end = i + 1;
+                break;
+            }
+        }
+
+        if end <= start || (end - start) < min_active_samples {
+             return audio.to_vec(); // Fallback to full audio if detection questionable
+        }
+
+        // Add small padding (e.g. 50ms = ~800 samples)
+        let padding = 800;
+        let start_padded = start.saturating_sub(padding).max(0);
+        let end_padded = (end + padding).min(audio.len());
+
+        audio[start_padded..end_padded].to_vec()
     }
     
     /// Helper: Extract averaged MFCCs from a region of audio

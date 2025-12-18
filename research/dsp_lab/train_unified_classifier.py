@@ -55,12 +55,13 @@ def train_unified_model(df, gender):
     # Class statistics
     classes = np.unique(y)
     
-    # --- PROMPT: Filter to only Vowels + M/P Syllables to improve accuracy ---
-    # Requested by user: Reduce cardinality to 2 consonant families (M & P)
+    # --- PROMPT: Filter to only Vowels + S/M Syllables (Highly Distinct) ---
+    # S (Fricative): High frequency noise, very different from vowels.
+    # M (Nasal): Stable, harmonic but distinct formants.
     valid_syllables = [
         'a', 'e', 'i', 'o', 'u',  # Vowels
-        'ma', 'me', 'mi', 'mo', 'mu', # M family
-        'pa', 'pe', 'pi', 'po', 'pu'  # P family
+        'ma', 'me', 'mi', 'mo', 'mu', # M family (Nasal)
+        'sa', 'se', 'si', 'so', 'su'  # S family (Fricative - Best Contrast)
     ]
     
     print(f"\nFiltering for {len(valid_syllables)} target classes: {valid_syllables}")
