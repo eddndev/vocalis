@@ -285,7 +285,8 @@ impl DspProcessor {
         // --- CRITICAL FIX: Trim Silence ---
         // Real-time audio contains silence before/after the syllable.
         // We must isolate the vocal region to align with training data.
-        let trimmed_audio = self.trim_silence(audio_data, 0.02, 200); // 2% max energy threshold
+        // Relaxed threshold to 0.005 (0.5%) to prevent clipping weak consonants (m, s)
+        let trimmed_audio = self.trim_silence(audio_data, 0.005, 200);
         
         // Use trimmed audio, or fallback to original if trimming failed/returned empty
         let active_audio = if !trimmed_audio.is_empty() {

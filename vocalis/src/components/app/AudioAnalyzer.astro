@@ -422,8 +422,15 @@
 
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 2048;
+
             const source = audioContext.createMediaStreamSource(stream);
-            source.connect(analyser);
+
+            // Boost gain ONLY for visualization (since AGC is off, raw mic is quiet)
+            const visGain = audioContext.createGain();
+            visGain.gain.value = 5.0;
+            source.connect(visGain);
+            visGain.connect(analyser);
+
             drawVisualizer();
 
             mediaRecorder = new MediaRecorder(stream);
@@ -557,23 +564,6 @@
 
             data = data.map((x) => x * gain);
         }
-
-        // SPECTRAL TILT CORRECTION (Low-Pass Filter)
-        // Problem: Mic is too "bright" (E -> I, U -> I).
-        // Solution: Mild smoothing to attenuate High Frequencies (>4kHz)
-        // Simple 3-point moving average: y[i] = 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1]
-        const smoothed = new Float32Array(data.length);
-        for (let i = 1; i < data.length - 1; i++) {
-            smoothed[i] =
-                0.25 * data[i - 1] + 0.5 * data[i] + 0.25 * data[i + 1];
-        }
-        // Handle edges
-        smoothed[0] = data[0];
-        smoothed[data.length - 1] = data[data.length - 1];
-        data = smoothed;
-        console.log(
-            "Applied mild Low-Pass filter (3-point smoothing) for spectral tilt correction.",
-        );
 
         // Pre-emphasis commented out (model trained without it)
         // const alpha = 0.97;
