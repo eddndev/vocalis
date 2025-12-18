@@ -26,17 +26,16 @@ pub struct DspProcessor {
 
 impl DspProcessor {
     pub fn new(sample_rate: u32, n_mfcc: usize) -> Self {
-        let frame_length_ms = 25.0; // 25ms
-        let hop_length_ms = 10.0;   // 10ms
-
-        let frame_length = (sample_rate as f32 * frame_length_ms / 1000.0).round() as usize;
-        let hop_length = (sample_rate as f32 * hop_length_ms / 1000.0).round() as usize;
+        // ALIGNMENT FIX: Match Librosa defaults (n_fft=512, hop_length=128)
+        // Librosa uses win_length=n_fft by default.
+        let frame_length = 512; // 32ms
+        let hop_length = 128;   // 8ms
         
         // n_fft is typically the smallest power of 2 greater than or equal to frame_length
-        let n_fft = frame_length.next_power_of_two();
+        let n_fft = 512;
         
         let n_mels = 40; // Common value
-        let f_min = 20.0;
+        let f_min = 0.0; // Librosa default is 0.0
         let f_max = sample_rate as f32 / 2.0;
 
         let mut planner = FftPlanner::new();

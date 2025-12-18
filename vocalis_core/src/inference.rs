@@ -11,7 +11,18 @@ impl Predictor {
         // Al forzar C0 = media, anulamos su efecto en el SVM.
         let mut feats = features.to_vec();
         if !feats.is_empty() && !model.scaler.mean.is_empty() {
+             // Neutralize C0 (Energy) for Onset
             feats[0] = model.scaler.mean[0];
+            
+            // Neutralize C0 (Energy) for Transition (Index 13)
+            if feats.len() > 13 && model.scaler.mean.len() > 13 {
+                feats[13] = model.scaler.mean[13];
+            }
+            
+            // Neutralize C0 (Energy) for Nucleus (Index 26)
+            if feats.len() > 26 && model.scaler.mean.len() > 26 {
+                feats[26] = model.scaler.mean[26];
+            }
         }
 
         feats.iter()

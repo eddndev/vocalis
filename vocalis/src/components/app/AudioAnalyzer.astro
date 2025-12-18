@@ -516,13 +516,13 @@
             data = audioBuffer.getChannelData(0);
         }
 
-        const alpha = 0.97;
-        const filtered = new Float32Array(data.length);
-        filtered[0] = data[0];
-        for (let i = 1; i < data.length; i++) {
-            filtered[i] = alpha * (filtered[i - 1] + data[i] - data[i - 1]);
-        }
-        data = filtered;
+        // const alpha = 0.97;
+        // const filtered = new Float32Array(data.length);
+        // filtered[0] = data[0];
+        // for (let i = 1; i < data.length; i++) {
+        //     filtered[i] = alpha * (filtered[i - 1] + data[i] - data[i - 1]);
+        // }
+        // data = filtered;
 
         if (data.length > EXPECTED_AUDIO_LENGTH) {
             const scanWindow = Math.floor(targetRate * 0.05);
