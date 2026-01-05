@@ -1,0 +1,206 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Navbar from "../components/ui/Navbar.astro";
+
+const sections = [
+  {
+    id: "pipeline",
+    title: "Pipeline DSP",
+    content: `La arquitectura se basa en la extracción de características robustas que modelan la percepción auditiva humana. El flujo de datos sigue la secuencia: Audio → Pre-énfasis → Ventaneo → FFT → Mel Filterbank → Log → DCT → MFCCs.`,
+  },
+  {
+    id: "standardization",
+    title: "Estandarización",
+    content: `Para resolver la "Paradoja de la Vocal Estacionaria", implementamos una Estandarización Global. Normalizamos cada vector contra las estadísticas fijas (media y desviación) de todo el corpus de voces, preservando las diferencias locales sin anular señales constantes.`,
+  },
+  {
+    id: "svm",
+    title: "Clasificación",
+    content: `Estrategia "Divide y Vencerás": 
+    1. Clasificación de Género basada en F0 (< 178.7 Hz = Masc).
+    2. SVM Especializado por Género (Kernel RBF) para la clasificación de vocales/sílabas.`,
+  },
+];
+---
+
+<Layout title="Reporte Técnico | Vocalis">
+  <Navbar />
+
+  <main class="pt-32 pb-24 bg-white min-h-screen">
+    <div class="max-w-4xl mx-auto px-6 md:px-12">
+      <!-- Header -->
+      <div class="mb-24 border-b border-black/10 pb-12">
+        <h1
+          class="text-xs font-mono tracking-widest uppercase text-text-muted mb-6"
+        >
+          Project Documentation
+        </h1>
+        <h2
+          class="text-5xl md:text-7xl font-display font-black tracking-tighter text-black uppercase leading-[0.9] mb-8"
+        >
+          Technical <br />
+          <span class="text-brand-primary">Report</span>
+        </h2>
+        <p class="text-xl text-text-muted leading-relaxed">
+          Documentación detallada de la arquitectura DSP, la justificación de algoritmos y la estrategia de robustez "Synthesis + Augmentation" implementada en Enero 2026.
+        </p>
+      </div>
+
+      <div class="space-y-32">
+        
+        <!-- Section: Robustness Strategy (Highlighted) -->
+        <section id="robustness">
+            <div class="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-8 mb-8 border-t-2 border-brand-primary pt-8">
+                <span class="text-4xl md:text-5xl font-display font-black text-black/10 select-none">01</span>
+                <h3 class="text-3xl md:text-4xl font-display font-bold uppercase tracking-tight">
+                    Estrategia de Robustez <span class="text-brand-primary text-xl align-top ml-2">New</span>
+                </h3>
+            </div>
+          
+            <div class="prose prose-lg prose-neutral max-w-none">
+                <p class="text-xl md:text-2xl leading-relaxed font-medium text-black">
+                  Para superar el sobreajuste al audio limpio y garantizar funcionalidad en entornos reales, implementamos una estrategia de <span class="underline decoration-brand-primary decoration-2 underline-offset-4">Síntesis + Aumentación</span>.
+                </p>
+
+                <div class="my-12 border border-black/10 rounded-lg overflow-hidden">
+                   <!-- Grid internal -->
+                   <div class="grid grid-cols-1 md:grid-cols-2">
+                       <div class="p-8 bg-gray-50 border-b md:border-b-0 md:border-r border-black/10">
+                        <h4 class="font-bold flex items-center gap-2 mb-4 text-sm uppercase tracking-widest">
+                            <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                            El Problema
+                        </h4>
+                        <ul class="list-disc list-inside text-sm text-text-muted space-y-3 marker:text-black/30">
+                          <li>Ruido de fondo (Hiss/Ambiente).</li>
+                          <li>Micrófonos con respuesta plana pobre.</li>
+                          <li>Variaciones drásticas de ganancia.</li>
+                        </ul>
+                      </div>
+                       <div class="p-8 bg-white">
+                        <h4 class="font-bold flex items-center gap-2 mb-4 text-sm uppercase tracking-widest">
+                            <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                            La Solución
+                        </h4>
+                         <ul class="space-y-4">
+                            <li class="text-sm">
+                                <span class="block font-bold text-black text-xs uppercase tracking-widest mb-1">01. Síntesis</span>
+                                <span class="text-text-muted">Extracción de núcleos vocales estables.</span>
+                            </li>
+                            <li class="text-sm">
+                                <span class="block font-bold text-black text-xs uppercase tracking-widest mb-1">02. Aumentación 4x</span>
+                                <span class="text-text-muted">Inyección de Ruido, Ganancia y EQ.</span>
+                            </li>
+                         </ul>
+                      </div>
+                   </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section: MFCC Justification -->
+        <section id="mfcc">
+            <div class="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-8 mb-12 border-t border-black/10 pt-8">
+                <span class="text-4xl md:text-5xl font-display font-black text-black/10 select-none">02</span>
+                <h3 class="text-3xl md:text-4xl font-display font-bold uppercase tracking-tight">
+                    ¿Por qué MFCC?
+                </h3>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Card 1 -->
+                <div>
+                    <div class="h-1 w-12 bg-black mb-6"></div>
+                    <h4 class="text-lg font-bold mb-3">Fuente vs Filtro</h4>
+                    <p class="text-text-muted leading-relaxed text-sm">
+                        La voz se compone de Fuente (tono) y Filtro (timbre). Para reconocer vocales, <strong>solo importa el Filtro</strong>. Los MFCCs separan estos componentes matemáticamente.
+                    </p>
+                </div>
+                 <!-- Card 2 -->
+                 <div>
+                    <div class="h-1 w-12 bg-black mb-6"></div>
+                    <h4 class="text-lg font-bold mb-3">Compresión</h4>
+                    <p class="text-text-muted leading-relaxed text-sm">
+                        Un espectrograma tiene miles de puntos correlacionados. 13 coeficientes MFCC capturan la misma envolvente espectral de forma compacta y decorrelacionada.
+                    </p>
+                </div>
+                 <!-- Card 3 -->
+                 <div>
+                    <div class="h-1 w-12 bg-black mb-6"></div>
+                    <h4 class="text-lg font-bold mb-3">Percepción</h4>
+                    <p class="text-text-muted leading-relaxed text-sm">
+                        La escala Mel imita la resolución del oído humano (alta en bajos, baja en agudos), priorizando la información fonética relevante.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Other Sections (With Explicit Margins) -->
+        <section id="pipeline">
+            <div class="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-8 mb-16 border-t border-black/10 pt-8">
+                <span class="text-4xl md:text-5xl font-display font-black text-black/10 select-none">03</span>
+                <h3 class="text-3xl md:text-4xl font-display font-bold uppercase tracking-tight">
+                    Pipeline & Algoritmos
+                </h3>
+            </div>
+            
+            <div class="block">
+                {sections.map(section => (
+                    <div class="mb-20"> <!-- Increased margin for spacing -->
+                        <h4 class="text-xl font-bold mb-8 pl-6 border-l-4 border-brand-primary">
+                            {section.title}
+                        </h4>
+                        <p class="text-lg text-text-muted leading-relaxed pl-6 max-w-3xl">
+                            {section.content}
+                        </p>    
+                    </div>
+                ))}
+            </div>
+        </section>
+
+        <!-- Visual Justification Table (Semantic Table) -->
+        <section id="visual">
+            <div class="flex flex-col md:flex-row md:items-baseline gap-4 md:gap-8 mb-12 border-t border-black/10 pt-8">
+                <span class="text-4xl md:text-5xl font-display font-black text-black/10 select-none">04</span>
+                <h3 class="text-3xl md:text-4xl font-display font-bold uppercase tracking-tight">
+                    Justificación Visual
+                </h3>
+            </div>
+            <p class="text-lg leading-relaxed text-text-muted mb-8 max-w-2xl">
+                El sistema no es una caja negra. Cada predicción se justifica visualmente analizando la "Firma Acústica" temporal del fonema en tres zonas críticas.
+            </p>
+            
+            <!-- Semantic Table -->
+            <div class="overflow-x-auto rounded-xl border border-black/10 shadow-sm">
+                <table class="w-full text-left text-sm border-collapse bg-white">
+                    <thead class="bg-black text-white uppercase font-mono tracking-widest text-xs">
+                        <tr>
+                            <th class="p-4 border-r border-white/20">Zona</th>
+                            <th class="p-4 border-r border-white/20">Descripción</th>
+                            <th class="p-4">Interpretación</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-black/5">
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="p-4 border-r border-black/5 font-bold text-brand-primary">Ataque</td>
+                            <td class="p-4 border-r border-black/5 text-text-muted">Inicio (0-35%)</td>
+                            <td class="p-4 text-black font-medium">Consonante</td>
+                        </tr>
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="p-4 border-r border-black/5 font-bold text-brand-primary">Transición</td>
+                            <td class="p-4 border-r border-black/5 text-text-muted">Medio (35-50%)</td>
+                            <td class="p-4 text-black font-medium">Coarticulación</td>
+                        </tr>
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="p-4 border-r border-black/5 font-bold text-brand-primary">Núcleo</td>
+                            <td class="p-4 border-r border-black/5 text-text-muted">Final (50-100%)</td>
+                            <td class="p-4 text-black font-medium">Vocal Pura</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+</Layout>
