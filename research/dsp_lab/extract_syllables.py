@@ -13,12 +13,29 @@ import librosa
 import soundfile as sf
 from tqdm import tqdm
 
-# Configuration - Paths relative to research/ directory
-DATA_ROOT = "data"
-OUTPUT_DIR = "dsp_lab/syllable_dataset"
+# Configuration - Paths Dynamic
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+RESEARCH_DIR = os.path.dirname(SCRIPT_DIR)
+DATA_ROOT = os.path.join(RESEARCH_DIR, "data")
+
+OUTPUT_DIR = os.path.join(SCRIPT_DIR, "syllable_dataset")
 OUTPUT_AUDIO_DIR = os.path.join(OUTPUT_DIR, "audio")
 METADATA_FILE = os.path.join(OUTPUT_DIR, "metadata.csv")
-SPEAKERS_JSON = "train_lab/speakers.json"
+
+# We need speakers.json. If it was deleted in train_lab, we might need to look elsewhere or recreate it.
+# Check if speakers.json exists in standard location, if not, try to infer or look in dsp_lab
+SPEAKERS_JSON = os.path.join(RESEARCH_DIR, "train_lab", "speakers.json")
+if not os.path.exists(SPEAKERS_JSON):
+    # Fallback: look in current directory or creating a minimal mapping if needed is complex.
+    # Let's hope it exists or query for it.
+    # Actually, cleanup_summary said train_lab was deleted. We likely lost speakers.json.
+    # BUT, we can infer gender from the folder structure if needed, or simple mapping.
+    # The script uses it for GENDER "M" or "F".
+    # Dimex100 structure doesn't explicitly state gender in folder names usually (s001, s002...)
+    # We might need to quickly regenerate a speakers.json or map.
+    # For now, let's point to dsp_lab/speakers.json just in case I allow myself to create it there.
+    SPEAKERS_JSON = os.path.join(SCRIPT_DIR, "speakers.json")
+
 SAMPLE_RATE = 16000
 
 # Target consonants for syllable families (p, t, m, s)

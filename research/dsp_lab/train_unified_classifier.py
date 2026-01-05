@@ -20,8 +20,9 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import warnings
 warnings.filterwarnings('ignore')
 
-INPUT_CSV = "research/dsp_lab/unified_features.csv"
-MODEL_DIR = "research/dsp_lab/models"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+INPUT_CSV = os.path.join(SCRIPT_DIR, "unified_features.csv")
+MODEL_DIR = os.path.join(SCRIPT_DIR, "models")
 
 
 def get_feature_columns():
