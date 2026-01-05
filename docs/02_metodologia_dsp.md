@@ -69,3 +69,31 @@ Se establece una "Zona de Confianza" basada en la estadística de miles de muest
 
 **Regla de Justificación:** Si la trayectoria del usuario sale del área sombreada en una zona crítica (ej. zona de Ataque para 'S'), se justifica el rechazo por "Falla en articulación inicial", independientemente de la probabilidad del modelo.
 
+## 2.5. Estrategia de Robustez: Síntesis y Aumentación (Enero 2026)
+
+Para superar el sobreajuste al audio limpio de estudio (Dimex100) y garantizar la funcionalidad en entornos de navegador ruidosos, se implementó una estrategia de **Data Augmentation Offline**.
+
+### 2.5.1. El Problema de Generalización
+El modelo original entrenado solo con datos limpios fallaba ante:
+1.  **Ruido de Micrófono:** El piso de ruido del micrófono del usuario alteraba los MFCCs de baja energía.
+2.  **Variación de Ganancia:** La distancia al micrófono cambiaba la amplitud relativa.
+3.  **Falta de Vocales Puras:** El dataset original de vocales se perdió, dejando solo sílabas.
+
+### 2.5.2. Pipeline de Generación Robusta (4 Etapas)
+Se reconstruyó el dataset de entrenamiento (`unified_features.csv`) mediante un proceso de 4 etapas:
+
+1.  **Recuperación de Género:** Se restauró la metadata original de `speakers.json` desde el historial de Git para garantizar una clasificación H/M precisa.
+2.  **Extracción de Sílabas:** Se procesaron ~8,400 archivos de audio raw del corpus Dimex100.
+3.  **Síntesis de Vocales (Vowel Synthesis):**
+    *   Para recuperar las vocales "puras" perdidas, se extrajo algorítmicamente el segmento **Núcleo** de cada sílaba.
+    *   *Ejemplo:* De la sílaba "sa", se aísla la "a" estable y se etiqueta como clase vocal 'a'.
+4.  **Aumentación (4x):** Cada muestra (sílaba o vocal sintética) se multiplicó por 4 aplicando transformaciones aleatorias con `audiomentations`:
+    *   **Original:** Audio limpio.
+    *   **Aug 1 (Ruido):** Inyección de Ruido Gaussiano (SNR 20-30dB).
+    *   **Aug 2 (Ganancia):** Variación de volumen dinámica (-6dB a +6dB).
+    *   **Aug 3 (EQ):** Ecualización paramétrica de 7 bandas para simular respuestas de frecuencia de micrófonos baratos.
+
+### 2.5.3. Resultado Final
+*   **Dataset:** 67,184 muestras de entrenamiento.
+*   **Composición:** 75% datos generados sintéticamente (aumentados), 25% datos reales limpios.
+*   **Impacto:** El modelo resultante tolera ruido ambiental y variaciones de micrófono sin perder precisión en la distinción de formantes críticos (ej. 'e' vs 'i'), logrando una precisión de validación >92% en el conjunto femenino.
