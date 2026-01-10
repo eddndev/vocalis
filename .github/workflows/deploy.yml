@@ -1,0 +1,64 @@
+name: Deploy to Hostgator
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Build & Deploy
+    steps:
+      - name: 🚚 Get latest code
+        uses: actions/checkout@v4
+
+      # --- STEP 1: RUST / WASM BUILD ---
+      - name: 🦀 Setup Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+
+      - name: 📦 Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: 'latest'
+
+      - name: 🛠️ Build WASM Core
+        working-directory: ./vocalis_core
+        run: wasm-pack build --target web --out-dir ../vocalis/src/lib/pkg
+        # This explicitly places the WASM/JS artifacts where Astro expects them
+
+      # --- STEP 2: ASTRO FRONTEND BUILD ---
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: './vocalis/package-lock.json'
+
+      - name: 📦 Install Frontend Dependencies
+        working-directory: ./vocalis
+        run: npm ci
+
+      - name: 🛠️ Build Astro Site
+        working-directory: ./vocalis
+        run: npm run build
+
+      # --- STEP 3: DEPLOY ---
+      - name: 🚀 FTP Deploy
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          # Determine the target directory on your server.
+          # Often 'public_html' or a subdomain folder like 'public_html/report'.
+          # If 'FTP_TARGET_DIR' is not set, it defaults to the root of the FTP user.
+          server-dir: ${{ secrets.FTP_TARGET_DIR || './public_html/' }}
+          local-dir: ./vocalis/dist/
+          protocol: ftps
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**

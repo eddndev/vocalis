@@ -3,9 +3,10 @@ import json
 import numpy as np
 import os
 
-# Paths relative to project root
-MODEL_DIR = "research/dsp_lab/models"
-OUTPUT_JSON = "research/dsp_lab/models/vocalis_model.json"
+# Paths Dynamic
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.join(SCRIPT_DIR, "models")
+OUTPUT_JSON = os.path.join(MODEL_DIR, "vocalis_model.json")
 
 def extract_svm_params(pipeline):
     """
@@ -55,7 +56,7 @@ def extract_svm_params(pipeline):
     return params
 
 def load_model_safe(path):
-    """Load a model file, return None if not found."""
+    print(f"DEBUG: Checking path: '{path}' -> Exists? {os.path.exists(path)}")
     if os.path.exists(path):
         return joblib.load(path)
     return None

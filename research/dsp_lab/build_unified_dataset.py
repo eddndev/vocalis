@@ -15,18 +15,29 @@ import numpy as np
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from feature_extractor import get_syllable_features, get_pitch_for_gender
+import audiomentations as A
 
-# Configuration - Paths relative to research/ directory
-VOWEL_AUDIO_DIR = "train_lab/dataset/audio"
-VOWEL_METADATA = "train_lab/dataset/metadata.csv"
-SYLLABLE_AUDIO_DIR = "dsp_lab/syllable_dataset/audio"
-SYLLABLE_METADATA = "dsp_lab/syllable_dataset/metadata.csv"
-OUTPUT_CSV = "dsp_lab/unified_features.csv"
+# Configuration - Paths Dynamic
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+RESEARCH_DIR = os.path.dirname(SCRIPT_DIR)
+
+VOWEL_AUDIO_DIR = os.path.join(RESEARCH_DIR, "train_lab", "dataset", "audio")
+VOWEL_METADATA = os.path.join(RESEARCH_DIR, "train_lab", "dataset", "metadata.csv")
+SYLLABLE_AUDIO_DIR = os.path.join(SCRIPT_DIR, "syllable_dataset", "audio")
+SYLLABLE_METADATA = os.path.join(SCRIPT_DIR, "syllable_dataset", "metadata.csv")
+OUTPUT_CSV = os.path.join(SCRIPT_DIR, "unified_features.csv")
 SAMPLE_RATE = 16000
 
 # Batch size for parallel processing
-BATCH_SIZE = 100
+BATCH_SIZE = 20
 
+# AUGMENTATION PIPELINE (Robustness Strategy)
+augmenter = A.Compose([
+    A.AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.015, p=0.5),
+    A.Gain(min_gain_db=-6.0, max_gain_db=6.0, p=0.5),
+    A.AirAbsorption(p=0.3), # Simulate spectral tilt / distance
+    # PitchShift optionally if needed, but kept conservative for now
+])
 
 def process_vowel_batch(batch_data):
     """
@@ -43,23 +54,35 @@ def process_vowel_batch(batch_data):
         try:
             y, sr = librosa.load(path, sr=SAMPLE_RATE, res_type='kaiser_fast')
             
-            # Extract 39-dim features (same for vowels and syllables)
+            # 1. Original
             feats = get_syllable_features(y, sr)
             f0 = get_pitch_for_gender(y, sr)
             
             entry = {
                 'filename': fname,
-                'label': row['label_vowel'],  # Pure vowel: a, e, i, o, u
+                'label': row['label_vowel'],
                 'gender': row['label_gender'],
                 'speaker_id': row['speaker_id'],
-                'source': 'vowel',
+                'source': 'vowel_clean',
                 'f0': f0
             }
-            
-            for key, value in feats.items():
-                entry[key] = value
-            
+            for key, value in feats.items(): entry[key] = value
             batch_results.append(entry)
+
+            # 2. Augmentations (3 variants)
+            for i in range(3):
+                y_aug = augmenter(samples=y, sample_rate=sr)
+                feats_aug = get_syllable_features(y_aug, sr)
+                
+                entry_aug = entry.copy()
+                entry_aug['source'] = f'vowel_aug_{i}'
+                # F0 might change slightly with noise but we keep original reference or re-calculate
+                # Re-calculating F0 for augmented might be unstable with noise, but let's try
+                # entry_aug['f0'] = get_pitch_for_gender(y_aug, sr) 
+                # Actually, stick to original F0/Gender for stability unless PitchShifted
+                
+                for key, value in feats_aug.items(): entry_aug[key] = value
+                batch_results.append(entry_aug)
             
         except Exception as e:
             continue
@@ -82,23 +105,64 @@ def process_syllable_batch(batch_data):
         try:
             y, sr = librosa.load(path, sr=SAMPLE_RATE, res_type='kaiser_fast')
             
-            # Extract 39-dim features
+            # 1. Original Syllable
             feats = get_syllable_features(y, sr)
             f0 = get_pitch_for_gender(y, sr)
             
-            entry = {
+            # --- SYLLABLE ENTRY ---
+            entry_syll = {
                 'filename': fname,
-                'label': row['syllable'],  # Full syllable: pa, te, mi, etc.
+                'label': row['syllable'],
                 'gender': row['gender'],
                 'speaker_id': row['speaker_id'],
-                'source': 'syllable',
+                'source': 'syllable_clean',
                 'f0': f0
             }
+            for key, value in feats.items(): entry_syll[key] = value
+            batch_results.append(entry_syll)
             
-            for key, value in feats.items():
-                entry[key] = value
-            
-            batch_results.append(entry)
+            # --- SYNTHETIC VOWEL ENTRY (Recovery Strategy) ---
+            # Extract vowel from syllable (last char: 'sa' -> 'a')
+            vowel_label = row['syllable'][-1]
+            if vowel_label in ['a', 'e', 'i', 'o', 'u']:
+                entry_vowel = {
+                    'filename': fname,
+                    'label': vowel_label, # Synthetic Pure Vowel
+                    'gender': row['gender'],
+                    'speaker_id': row['speaker_id'],
+                    'source': 'vowel_synth_from_syllable',
+                    'f0': f0
+                }
+                # Construct steady-state vowel features from Nucleus
+                for i in range(13):
+                    n_val = feats[f'mfcc_nucleus_{i}']
+                    entry_vowel[f'mfcc_onset_{i}'] = n_val
+                    entry_vowel[f'mfcc_trans_{i}'] = n_val
+                    entry_vowel[f'mfcc_nucleus_{i}'] = n_val
+                
+                batch_results.append(entry_vowel)
+
+            # 2. Augmentations (3 variants) - Generates BOTH Syllable and Synthetic Vowel
+            for i in range(3):
+                y_aug = augmenter(samples=y, sample_rate=sr)
+                feats_aug = get_syllable_features(y_aug, sr)
+                
+                # Augmented Syllable
+                entry_syll_aug = entry_syll.copy()
+                entry_syll_aug['source'] = f'syllable_aug_{i}'
+                for key, value in feats_aug.items(): entry_syll_aug[key] = value
+                batch_results.append(entry_syll_aug)
+                
+                # Augmented Synthetic Vowel
+                if vowel_label in ['a', 'e', 'i', 'o', 'u']:
+                    entry_vowel_aug = entry_vowel.copy()
+                    entry_vowel_aug['source'] = f'vowel_synth_aug_{i}'
+                    for k in range(13):
+                        n_val = feats_aug[f'mfcc_nucleus_{k}']
+                        entry_vowel_aug[f'mfcc_onset_{k}'] = n_val
+                        entry_vowel_aug[f'mfcc_trans_{k}'] = n_val
+                        entry_vowel_aug[f'mfcc_nucleus_{k}'] = n_val
+                    batch_results.append(entry_vowel_aug)
             
         except Exception as e:
             continue
@@ -115,16 +179,19 @@ def process_dataset(audio_dir, metadata_path, process_func, desc):
         return []
     
     df = pd.read_csv(metadata_path)
+    
+    # SUBSAMPLING for Speed (20% of data = ~8400 files -> ~67k augmented samples)
+    df = df.sample(frac=0.2, random_state=42)
+    
     total = len(df)
-    print(f"  Found {total} samples in {metadata_path}")
+    print(f"  Found {total} samples in {metadata_path} (Subsampled 20%)")
     
     # Create batches with audio_dir included
     chunks = [(audio_dir, df.iloc[i:i + BATCH_SIZE]) for i in range(0, total, BATCH_SIZE)]
     
     all_results = []
-    max_workers = os.cpu_count()
-    
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+    # Parallel processing
+    with ProcessPoolExecutor(max_workers=4) as executor:
         futures = [executor.submit(process_func, chunk) for chunk in chunks]
         
         for future in tqdm(as_completed(futures), total=len(futures), desc=desc, unit="batch"):
