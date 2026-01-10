@@ -1,6 +1,6 @@
 # Vocalis: Clasificación Acústica Determinista mediante DSP y Machine Learning Clásico
 
-**Autores:** Eduardo Alonso  
+**Autores:** Equipo 1
 **Fecha:** Diciembre 2025  
 **Versión:** 2.0 (Enfoque DSP/WASM)
 
