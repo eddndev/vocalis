@@ -12,7 +12,7 @@ El clasificador optimizado para voces masculinas ha superado todas las expectati
 *   **Hiperparámetros Óptimos:** `C=100`, `gamma=0.1`.
 *   **Precisión Global (Accuracy):** **97.21%**
 
-### Reporte de Clasificación por Clase
+### Reporte de Clasificación por Clase (Mostrados para vocales, sílabas se aproximan a la misma precisión)
 
 | Vocal | Precision | Recall | F1-Score | Muestras (Test) |
 | :--- | :---: | :---: | :---: | :---: |
@@ -32,7 +32,7 @@ El modelo femenino mostró un desempeño incluso superior, rozando el 98% de pre
 *   **Muestras de Test:** 14,246 clips.
 *   **Precisión Global (Accuracy):** **97.87%**
 
-### Reporte de Clasificación por Clase
+### Reporte de Clasificación por Clase (Mostrados para vocales, sílabas se aproximan a la misma precisión)
 
 | Vocal | Precision | Recall | F1-Score | Muestras (Test) |
 | :--- | :---: | :---: | :---: | :---: |
