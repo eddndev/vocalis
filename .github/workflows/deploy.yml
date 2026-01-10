@@ -1,9 +1,10 @@
-name: Deploy to Hostgator
+name: Deploy via SSH
 
 on:
   push:
     branches:
       - main
+      - feature/syllable-recognition
 
 jobs:
   deploy:
@@ -27,7 +28,6 @@ jobs:
       - name: 🛠️ Build WASM Core
         working-directory: ./vocalis_core
         run: wasm-pack build --target web --out-dir ../vocalis/src/lib/pkg
-        # This explicitly places the WASM/JS artifacts where Astro expects them
 
       # --- STEP 2: ASTRO FRONTEND BUILD ---
       - name: 🟢 Setup Node.js
@@ -45,20 +45,17 @@ jobs:
         working-directory: ./vocalis
         run: npm run build
 
-      # --- STEP 3: DEPLOY ---
-      - name: 🚀 FTP Deploy
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+      # --- STEP 3: DEPLOY VIA SSH ---
+      - name: 🚀 Deploy via Rsync
+        uses: easingthemes/ssh-deploy@v5.0.3
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          # Determine the target directory on your server.
-          # Often 'public_html' or a subdomain folder like 'public_html/report'.
-          # If 'FTP_TARGET_DIR' is not set, it defaults to the root of the FTP user.
-          server-dir: ${{ secrets.FTP_TARGET_DIR || './public_html/' }}
-          local-dir: ./vocalis/dist/
-          protocol: ftps
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/node_modules/**
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          REMOTE_HOST: ${{ secrets.SSH_HOST }}
+          REMOTE_USER: ${{ secrets.SSH_USERNAME }}
+          # Path on the server. Ensure this folder exists or the user has rights to create it.
+          TARGET: ${{ secrets.SSH_TARGET_DIR }}
+          # Path from the build environment (The trailing slash is important for rsync)
+          SOURCE: "vocalis/dist/"
+          # Rsync arguments: recursive, links, times, compress, verbose, delete extraneous files on server
+          ARGS: "-rlgoDzvc -i --delete"
+          EXCLUDE: "/node_modules/, /.git/, /.github/"
